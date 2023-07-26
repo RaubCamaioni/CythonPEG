@@ -11,6 +11,11 @@ def bracket_suppress(content):
 def curl_suppress(content):
     return Suppress("{") + Optional(content) + Suppress("}")
 
+def extend_empty(tokens, n):
+    if len(tokens) == 0:
+        tokens.extend([""]*n)
+    return tokens
+
 # literals
 CLASS = Literal("class")
 STRUCT = Literal("struct")
@@ -59,14 +64,6 @@ recursive_cython_def_definition = Forward()
 recursive_cython_class_definition = Forward()
 recursive_cython_struct_definition = Forward()
 
-def extend_empty(tokens, n):
-    """optional return too limiting, forces optional return size"""
-
-    if len(tokens) == 0:
-        tokens.extend([""]*n)
-
-    return tokens
-
 # python type hint and arguments
 empty_default_return = ParseResults()
 empty_default_return.extend(["", ""])
@@ -100,12 +97,12 @@ function_definition = function_decleration + Optional(docstring, default="") + f
 
 # cython function definition 
 cython_function_arguments = Group(parentheses_suppress(cython_arguments))
-cython_function_decleration = Group(Group((CDEF | CPDEF) + Optional(cython_type_hint + ~cython_function_arguments, default="")) + VARIABLE + cython_function_arguments + Optional(VARIABLE, default="") + Suppress(":")) 
+cython_function_decleration = Group(Group((DEF | CDEF | CPDEF) + Optional(cython_type_hint + ~cython_function_arguments, default="")) + VARIABLE + cython_function_arguments + Optional(VARIABLE, default="") + Suppress(":")) 
 cython_function_body = IndentedBlock(recursive_cython_def_definition, recursive=True)
 cython_function_definition = cython_function_decleration + Optional(docstring, default="") + cython_function_body
 
 # cython class definition
-cython_class_decleration = Group(Group(CDEF +(CLASS|STRUCT)) + VARIABLE +  Suppress(":"))
+cython_class_decleration = Group(Group(CDEF + CLASS) + VARIABLE +  Suppress(":"))
 cython_class_body = IndentedBlock(recursive_cython_class_definition, recursive=True)
 cython_class_definition = cython_class_decleration + Optional(docstring, default="") + cython_class_body
 
@@ -114,6 +111,7 @@ cython_struct_decleration = Group(Group(CDEF + STRUCT) + VARIABLE + Suppress(":"
 cython_struct_body = IndentedBlock(recursive_cython_struct_definition, recursive=True)
 cython_struct_definition = cython_struct_decleration + Optional(docstring, default="") + cython_struct_body
 
+# recursive definitions
 definitions = (class_definition | function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | restOfLine)
 recursive_class_definition         << definitions
 recursive_def_definition           << definitions
@@ -186,13 +184,14 @@ def cdef2str(ret, name, args, gil, docs, indent=0):
     
     ret_str = f" -> {ret_str}" if ret_str else ''
     # return f"def {name}({cythonargs2str(args)}) -> {ret_str}:{doc_str}"
-    return f"def {name}({cythonargs2str(args)}){ret_str}:{doc_str}\n    ..."
+    return textwrap.indent(f"def {name}({cythonargs2str(args)}){ret_str}:{doc_str}\n    ...", "    "*indent)
 
 def cpdef2str(ret, name, args, gil, docs, indent=0):
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
 
     if isinstance(ret[1], ParseResults):    
         ret_str =  f"Tuple[{', '.join(r for r in ret[1])}]"
+        
     elif isinstance(ret[1], str):
         return_check = len(ret) == 3 and isinstance(ret[2], ParseResults)
         return_type = "np.ndarray" if return_check else ret[1] # all memmory views returned as numpy arrays 
@@ -200,7 +199,7 @@ def cpdef2str(ret, name, args, gil, docs, indent=0):
     
     ret_str = f" -> {ret_str}" if ret_str else ''
     # return f"def {name}({cythonargs2str(args)}) -> {ret_str}:{doc_str}"
-    return f"def {name}({cythonargs2str(args)}){ret_str}:{doc_str}\n    ..."
+    return textwrap.indent(f"def {name}({cythonargs2str(args)}){ret_str}:{doc_str}\n    ...", "    "*indent)
 
 def class2str(name, parent, docs):
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
@@ -217,7 +216,7 @@ def parse_tree_to_stub_file(parseTree):
     "\n"])
 
     for branch in parseTree:
-        result, startline, tokens = branch
+        result, _, _ = branch
 
         decleration, docs, body = result
         state = decleration[0]
@@ -229,10 +228,27 @@ def parse_tree_to_stub_file(parseTree):
         elif len(state) > 0 and state[0] == "cdef":
 
             if decleration[0][1] in ["class", "struct"]:
+
+                stub_file += class2str(decleration[1], "", docs) + "\n"
+                
+                if decleration[0][1] == "struct":
+                    for b in body:
+                        stub_file += "    " + b + '\n'
+                    stub_file += "\n"
+                
+                elif decleration[0][1] == "class":
+                    for i, b in enumerate(body):
+                        if len(b) > 0 and b[0][0] in ["def", "cdef"]:
+                            docs = body[i+1]
+                            print("body", b)
+                            ret, name, args, gil = b
+                            stub_file += '\n' + cdef2str(ret, name, args, gil, docs, indent=1) + '\n'
+                    stub_file += '\n'
+                        
                 continue
             else:
-                ret, name, arg, gil = decleration
-                stub_file += cdef2str(ret, name, arg, gil, docs) + '\n'*2
+                ret, name, args, gil = decleration
+                stub_file += cdef2str(ret, name, args, gil, docs) + '\n'*2
 
         elif len(state) > 0 and state[0] == "cpdef":
             ret, name, arg, gil = decleration
@@ -267,7 +283,7 @@ def parse_tree_to_stub_file(parseTree):
 
 if __name__ == "__main__":
 
-    with open("local/test2.py", mode="r") as f:
+    with open("local/test.py", mode="r") as f:
         input_code = f.read()
 
     # Parse the input code using the defined grammar
