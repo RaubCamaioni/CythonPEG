@@ -2,6 +2,7 @@ from pyparsing import *
 import textwrap
 from functools import partial
 
+# helper functions
 def parentheses_suppress(content):
     return Suppress("(") + Optional(content) + Suppress(")")
 
@@ -16,13 +17,66 @@ def extend_empty(tokens, n):
         tokens.extend([""]*n)
     return tokens
 
-# literals
+# literal definitions
 CLASS = Literal("class")
 STRUCT = Literal("struct")
 DEF = Literal("def")
 CPDEF = Literal("cpdef")
 CDEF = Literal("cdef")
 STRUCT = Literal("struct")
+DATACLASS = Literal("dataclass")
+DOT = Suppress('.')
+COMMA = Suppress(',')
+EQUALS = Suppress('=')
+COLON = Suppress(':')
+PLUS = Literal('+')
+MINUS = Literal('-')
+MULT = Literal('*')
+DIV = Literal('/')
+
+
+# object definitions
+VARIABLE = Word(alphanums+"_")
+INTEGER = Word("+-" + nums) + ~FollowedBy(".")
+FLOAT = Combine(Word("+-" + nums) + "." + Word(nums))
+TRUE = Literal("True")
+FALSE = Literal("False")
+NONE = Literal("None")
+STRING = QuotedString(quoteChar="'") | QuotedString(quoteChar='"')
+ENUM = Word(alphanums + '.')
+PRIMATIVE = (FLOAT | INTEGER | TRUE | FALSE | NONE | STRING)
+OBJECT = Forward()
+LIST = Group(bracket_suppress(delimitedList(OBJECT)))("list")
+TUPLE = Group(parentheses_suppress(delimited_list(OBJECT)))("tuple")
+DICT = Group(curl_suppress(delimitedList(Group(OBJECT + Suppress(":") + OBJECT))))("dict")
+SET = Group(curl_suppress(delimited_list(OBJECT)))("set")
+CLASS_CONSTRUCTOR = Group(VARIABLE+delimited_list(parentheses_suppress(OBJECT)))("class")
+NONPRIMATIVE = (LIST | TUPLE | DICT | SET | ENUM | CLASS_CONSTRUCTOR)
+OBJECT << (NONPRIMATIVE | PRIMATIVE)
+
+# type definitions
+type_forward = Forward()
+type_bracket = bracket_suppress(delimited_list(type_forward))
+type_definition  = (OneOrMore(VARIABLE + Optional(DOT)) + Optional(Group(type_bracket)))("type")
+type_forward << type_definition
+
+# argument definition
+argument_default = (EQUALS + OBJECT)("default")
+argument_definition = (VARIABLE("name") + Optional(COLON + type_definition) + Optional(argument_default))("argument")
+
+# arguments definition
+arguments_definition = parentheses_suppress(delimited_list(argument_definition))("arguments")
+
+import sys
+sys.exit()
+
+# def argument_definition():
+#     identifier = Word(alphanums)
+#     argument_forward = Forward()
+#     bracketed_arguments = Group(bracket_suppress(delimited_list(argument_forward)))
+#     argument = Group(OneOrMore(identifier+Optional(DOT)) + Optional(bracketed_arguments))
+#     argument_forward << bracketed_arguments
+#     return argument
 
 # objects
 INTEGER = Word("+-" + nums) + ~FollowedBy(".")
@@ -41,21 +95,17 @@ SET = Group(curl_suppress(delimited_list(OBJECT)))
 NONPRIMATIVE = (LIST | TUPLE | DICT | SET | ENUM)
 OBJECT << (NONPRIMATIVE | PRIMATIVE)
 
-# operations
-plus = Literal('+')
-minus = Literal('-')
-mult = Literal('*')
-div = Literal('/')
 
 # Define grammar for the entire expression
 expression = Forward()
 atom = OBJECT | Group(Literal('(') + expression + Literal(')'))
-expression << infixNotation(atom, [(mult | div, 2, opAssoc.LEFT), (plus | minus, 2, opAssoc.LEFT),])
+expression << infixNotation(atom, [(MULT | DIV, 2, opAssoc.LEFT), (PLUS | MINUS, 2, opAssoc.LEFT),])
 
 # variable and type names
 VARIABLE = Word(alphanums+'_')
 TWORD = Word(alphanums+'_'+'*'+'.')
 TYPE = (TWORD) | Group(parentheses_suppress(delimited_list(TWORD)))
+
 OPTIONALBRACKET = Group(Optional(bracket_suppress(delimited_list(TWORD))))
 
 recursive_class_definition = Forward()
@@ -111,6 +161,11 @@ cython_struct_decleration = Group(Group(CDEF + STRUCT) + VARIABLE + Suppress(":"
 cython_struct_body = IndentedBlock(recursive_cython_struct_definition, recursive=True)
 cython_struct_definition = cython_struct_decleration + Optional(docstring, default="") + cython_struct_body
 
+# dataclass definition
+dataclass_decleration = Group(Suppress("@") + DATACLASS + CLASS + VARIABLE + Suppress(":"))
+dataclass_body = IndentedBlock(rest_of_line, recursive=True)
+dataclass_definition = dataclass_decleration + Optional(docstring, default="") + dataclass_body
+
 # recursive definitions
 definitions = (class_definition | function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | restOfLine)
 recursive_class_definition         << definitions
@@ -119,7 +174,7 @@ recursive_cython_def_definition    << definitions
 recursive_cython_class_definition  << definitions
 recursive_cython_struct_definition << definitions
 
-python_script_parser = class_definition | function_definition | cython_function_definition | cython_class_definition | cython_struct_definition
+cython_parser = class_definition | function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | dataclass_definition
 
 def args2str(args, newlines=False):
     """convert argument format List[(name, type, default)] into a string representation."""
@@ -205,6 +260,19 @@ def class2str(name, parent, docs):
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
     return f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
 
+def recursive_body(body, indent=0):
+    body_str = ""
+    for b in body:
+        
+        if isinstance(b, ParseResults):
+            body_str_indented = recursive_body(b, indent=indent+1)
+            body_str += body_str_indented
+            
+        elif isinstance(b, str):
+            body_str += b + '\n'
+            
+    return textwrap.indent(body_str, "    "*indent)
+    
 def parse_tree_to_stub_file(parseTree):
     stub_file = "\n".join([
     "import numpy as np",
@@ -220,7 +288,7 @@ def parse_tree_to_stub_file(parseTree):
 
         decleration, docs, body = result
         state = decleration[0]
-
+        
         if state == "def":
             _, name, args, ret = decleration
             stub_file += def2str(name, args, ret, docs) + '\n'*2
@@ -240,7 +308,6 @@ def parse_tree_to_stub_file(parseTree):
                     for i, b in enumerate(body):
                         if len(b) > 0 and b[0][0] in ["def", "cdef"]:
                             docs = body[i+1]
-                            print("body", b)
                             ret, name, args, gil = b
                             stub_file += '\n' + cdef2str(ret, name, args, gil, docs, indent=1) + '\n'
                     stub_file += '\n'
@@ -277,6 +344,12 @@ def parse_tree_to_stub_file(parseTree):
                 stub_file += "    ..." + '\n'
 
             stub_file += '\n'
+            
+        elif state == "dataclass":
+            name = decleration[2]
+            stub_file += "@dataclass" + '\n'
+            stub_file += f"class {name}:" + '\n'
+            stub_file += recursive_body(body, indent=1) + '\n'
 
     return stub_file
 
@@ -287,7 +360,7 @@ if __name__ == "__main__":
         input_code = f.read()
 
     # Parse the input code using the defined grammar
-    parseTree = list(python_script_parser.scan_string(input_code+"\n\n"))
+    parseTree = list(cython_parser.scan_string(input_code+"\n\n"))
 
     stub_file = parse_tree_to_stub_file(parseTree)
     print(stub_file)
