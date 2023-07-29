@@ -106,7 +106,7 @@ function_body = IndentedBlock(recursive_def_definition, recursive=True)
 function_definition = (function_decleration + Optional(docstring, default="") + function_body)("def")
 
 # cython function definition 
-cython_function_decleration = Group(Suppress((DEF | CDEF | CPDEF) + Optional(type_definition + ~cython_arguments_definition, default="")) + VARIABLE + cython_arguments_definition + Optional(VARIABLE, default="") + Suppress(":")) 
+cython_function_decleration = Group(Suppress((DEF | CDEF | CPDEF)) + Optional(type_definition + ~cython_arguments_definition, default="") + VARIABLE + Group(cython_arguments_definition) + Optional(VARIABLE, default="") + Suppress(":"))
 cython_function_body = IndentedBlock(recursive_cython_def_definition, recursive=True)
 cython_function_definition = (cython_function_decleration + Optional(docstring, default="") + cython_function_body)("cdef")
 
@@ -160,7 +160,7 @@ def expression2str(expression):
     if isinstance(expression, str):
         return expression
     
-    return expression_string        
+    return expression_string
 
 def type2str(type_tree):
     type_name, type_bracket, type_default = type_tree
@@ -195,21 +195,7 @@ def args2str(args, newlines=False):
 
 def def2str(name, args, ret, docs, indent=0):
     
-    if not ret:
-        return_str = ""
-    else:
-        return_str = arg2str(ret)
-    
-    # elif isinstance(ret[0], str):
-    #     return_str = ret[0]
-
-    #     if isinstance(ret[1], ParseResults) and len(ret[1]):
-    #         return_str = return_str + f"[{', '.join([r for r in ret[1]])}]"
-
-    # # syntax is not valid for the following
-    # elif isinstance(ret[0], ParseResults):
-    #     return_str = f"{ret[0]}[{', '.join([t for t in ret[1:]])}]"
-
+    return_str = arg2str(ret) if ret else ""
     return_str = f" -> {return_str}" if return_str else ''
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
     
@@ -222,42 +208,22 @@ def def2str(name, args, ret, docs, indent=0):
 def cythonargs2str(args, newlines=False):
     """convert argument format List[(name, type, default)] into a string representation."""
 
-    def format_arg(t, a, n, d):
+    def format_arg(t, n, d):
+        type_str = type2str(t)
         default_str = f' = {d}' if d else ''
-        return f'{n}: {t}{default_str}'
+        return f'{n}: {type_str}{default_str}'
 
     joiner = ',\n    ' if newlines else ', '
-
-    return joiner.join(format_arg(t, a, b, d) for t, a, b, d in args)
+    return joiner.join([format_arg(t, n, d) for t, n, d in args])
 
 def cdef2str(ret, name, args, gil, docs, indent=0):
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
-
-    if isinstance(ret[1], ParseResults):
-        ret_str =  f"Tuple[{', '.join(r for r in ret[1])}]"
-    elif isinstance(ret[1], str):
-        return_check = len(ret) == 3 and isinstance(ret[2], ParseResults)
-        return_type = "np.ndarray" if return_check else ret[1] # all memmory views returned as numpy arrays 
-        ret_str = f"{return_type}"
-    
+    ret_str = type2str(ret) if ret else "" 
     ret_str = f" -> {ret_str}" if ret_str else ''
-    # return f"def {name}({cythonargs2str(args)}) -> {ret_str}:{doc_str}"
-    return textwrap.indent(f"def {name}({cythonargs2str(args)}){ret_str}:{doc_str}\n    ...", "    "*indent)
-
-def cpdef2str(ret, name, args, gil, docs, indent=0):
-    doc_str = f'\n    \"""{docs}\"""' if docs else ''
-
-    if isinstance(ret[1], ParseResults):    
-        ret_str =  f"Tuple[{', '.join(r for r in ret[1])}]"
-        
-    elif isinstance(ret[1], str):
-        return_check = len(ret) == 3 and isinstance(ret[2], ParseResults)
-        return_type = "np.ndarray" if return_check else ret[1] # all memmory views returned as numpy arrays 
-        ret_str = f"{return_type}"
-    
-    ret_str = f" -> {ret_str}" if ret_str else ''
-    # return f"def {name}({cythonargs2str(args)}) -> {ret_str}:{doc_str}"
-    return textwrap.indent(f"def {name}({cythonargs2str(args)}){ret_str}:{doc_str}\n    ...", "    "*indent)
+    arg_str = cythonargs2str(args)
+    if len(arg_str) > 100:
+        arg_str = cythonargs2str(args, newlines=True)
+    return textwrap.indent(f"def {name}({arg_str}){ret_str}:{doc_str}\n    ...", "    "*indent)
 
 def class2str(name, parent, docs):
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
@@ -318,11 +284,6 @@ def parse_tree_to_stub_file(parseTree):
                 stub_file += "    " + b + '\n'
             stub_file += "\n"
             
-        elif definitionName == "cpdef":
-            decleration, docs, body = result
-            ret, name, arg, gil = decleration
-            stub_file += cpdef2str(ret, name, arg, gil, docs) + '\n'*2
-
         elif definitionName == "class":
             decleration, docs, body = result
             name, parent = decleration
