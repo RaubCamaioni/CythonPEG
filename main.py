@@ -38,7 +38,6 @@ MULT = Literal('*')
 DIV = Literal('/')
 RETURN = Literal("->")
 
-
 # object definitions
 VARIABLE = Word("_"+alphanums+"_"+".")
 INTEGER = Word("+-" + nums) + ~FollowedBy(".")
@@ -50,12 +49,13 @@ STRING = QuotedString(quoteChar="'") | QuotedString(quoteChar='"')
 ENUM = Word(alphanums + '.')
 PRIMATIVE = (FLOAT | INTEGER | TRUE | FALSE | NONE | STRING)
 OBJECT = Forward()
+MEMMORYVIEW = Literal(':') + (FollowedBy(Literal(",")) | FollowedBy(Literal("]")))
 LIST = Group(bracket_suppress(delimitedList(OBJECT)))("list")
 TUPLE = Group(parentheses_suppress(delimited_list(OBJECT)))("tuple")
 DICT = Group(curl_suppress(delimitedList(Group(OBJECT + Suppress(":") + OBJECT))))("dict")
 SET = Group(curl_suppress(delimited_list(OBJECT)))("set")
 CLASS_CONSTRUCTOR = Group(VARIABLE+delimited_list(parentheses_suppress(OBJECT)))("class")
-NONPRIMATIVE = (LIST | TUPLE | DICT | SET | ENUM | CLASS_CONSTRUCTOR)
+NONPRIMATIVE = (LIST | TUPLE | DICT | SET | ENUM | CLASS_CONSTRUCTOR )
 OBJECT << (NONPRIMATIVE | PRIMATIVE)
 
 # EXPRESSION definition
@@ -69,8 +69,7 @@ default_definition = (EQUALS + EXPRESSION)("default")
 # type definitions
 type_forward = Forward()
 type_bracket = bracket_suppress(delimited_list(type_forward))
-# type_definition = Group((OneOrMore(VARIABLE + Optional(DOT))) + EmptyDefault(Group(type_bracket)) + EmptyDefault(default_definition+ ~Literal(')')))("type")
-type_definition = Group(VARIABLE + EmptyDefault(Group(type_bracket)) + EmptyDefault(default_definition+ ~Literal(')')))("type")
+type_definition = Group((VARIABLE | MEMMORYVIEW) + EmptyDefault(Group(type_bracket)) + EmptyDefault(default_definition + ~Literal(')')))("type")
 type_forward << type_definition
 
 # return definitions
@@ -162,22 +161,31 @@ def expression2str(expression):
         return expression
     
     return expression_string        
-        
-def arg2str(arg):
+
+def type2str(type_tree):
+    type_name, type_bracket, type_default = type_tree
     
+    if type_bracket:
+        bracket_str = "["+", ".join(type2str(arg) for arg in type_bracket)+"]" if type_bracket else ""
+    else:
+        bracket_str = ""
+        
+    type_default_str = f'={expression2str(type_default)}' if type_default else ''
+    return f"{type_name}{bracket_str}{type_default_str}"
+        
+
+def arg2str(arg):
+
     arg_name, arg_type, arg_default = arg
 
-    if arg_type:
-        type_name, type_bracket, type_default = arg_type
-        bracket_str = "["+", ".join(arg2str(arg) for arg in type_bracket)+"]" if type_bracket else ""
-        type_default_str = f'={expression2str(type_default)}' if type_default else ''
-        type_name = type_name + bracket_str + type_default_str
+    if isinstance(arg_type, ParseResults):
+        type_str = type2str(arg_type)        
     else:
-        type_name = ""
+        type_str = ""
 
-    type_str = f': {type_name}' if type_name else ''
+    type_str = f': {type_str}' if type_str else ''
     arg_default_str = f'={expression2str(arg_default)}' if arg_default else ''
-    
+
     return f'{arg_name}{type_str}{arg_default_str}'
     
 def args2str(args, newlines=False):
@@ -186,7 +194,6 @@ def args2str(args, newlines=False):
     return joiner.join(arg2str(arg) for arg in args)
 
 def def2str(name, args, ret, docs, indent=0):
-    
     
     if not ret:
         return_str = ""
