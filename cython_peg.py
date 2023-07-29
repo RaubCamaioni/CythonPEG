@@ -37,6 +37,7 @@ MINUS = Literal('-')
 MULT = Literal('*')
 DIV = Literal('/')
 RETURN = Literal("->")
+SELF = Literal("self")
 
 # object definitions
 VARIABLE = Word("_"+alphanums+"_"+".")
@@ -77,7 +78,7 @@ python_return_definition = Suppress(RETURN) + type_definition
 
 # argument definition
 python_argument_definition = Group(VARIABLE("name") + EmptyDefault(COLON + type_definition, 1) + EmptyDefault(default_definition))("argument")
-cython_argument_definition = Group(type_definition + VARIABLE("name") + EmptyDefault(default_definition))("arguments")
+cython_argument_definition = Group((type_definition + VARIABLE("name") + EmptyDefault(default_definition)) | SELF)("arguments")
 
 # arguments definition
 python_arguments_definition = parentheses_suppress(delimited_list(python_argument_definition))("arguments")
@@ -106,7 +107,7 @@ function_body = IndentedBlock(recursive_def_definition, recursive=True)
 function_definition = (function_decleration + Optional(docstring, default="") + function_body)("def")
 
 # cython function definition 
-cython_function_decleration = Group(Suppress((DEF | CDEF | CPDEF)) + Optional(type_definition + ~cython_arguments_definition, default="") + VARIABLE + Group(cython_arguments_definition) + Optional(VARIABLE, default="") + Suppress(":"))
+cython_function_decleration = Group(Suppress((DEF | CDEF | CPDEF)) + Optional(type_definition + ~cython_arguments_definition, default="") + VARIABLE + Group(cython_arguments_definition) + Optional(VARIABLE, default="") + Suppress(":"))("cdef_declearation")
 cython_function_body = IndentedBlock(recursive_cython_def_definition, recursive=True)
 cython_function_definition = (cython_function_decleration + Optional(docstring, default="") + cython_function_body)("cdef")
 
@@ -165,6 +166,9 @@ def expression2str(expression):
 def type2str(type_tree):
     type_name, type_bracket, type_default = type_tree
     
+    if type_name == ":":
+        type_name = "COLON"
+    
     if type_bracket:
         bracket_str = "["+", ".join(type2str(arg) for arg in type_bracket)+"]" if type_bracket else ""
     else:
@@ -208,13 +212,15 @@ def def2str(name, args, ret, docs, indent=0):
 def cythonargs2str(args, newlines=False):
     """convert argument format List[(name, type, default)] into a string representation."""
 
-    def format_arg(t, n, d):
+    def format_arg(arg):
+        if arg[0] == "self": return "self" # handle unique case cdef inside class
+        t, n, d = arg
         type_str = type2str(t)
         default_str = f' = {d}' if d else ''
         return f'{n}: {type_str}{default_str}'
 
     joiner = ',\n    ' if newlines else ', '
-    return joiner.join([format_arg(t, n, d) for t, n, d in args])
+    return joiner.join([format_arg(arg) for arg in args])
 
 def cdef2str(ret, name, args, gil, docs, indent=0):
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
@@ -243,15 +249,9 @@ def recursive_body(body, indent=0):
     return textwrap.indent(body_str, "    "*indent)
     
 def parse_tree_to_stub_file(parseTree):
-    stub_file = "\n".join([
-    "import numpy as np",
-    "from enum import Enum",
-    "from typing import Optional, Tuple, Dict, List, Generator, Union, DefaultDict",
-    "\n# type convertions from cython to python",
-    "float64 = float32 = double = long = longlong = float",
-    "uint64 = uint32 = uint16 = uint8 = short = int",
-    "\n"])
-
+    
+    stub_file = ""
+    
     for branch in parseTree:
         result, _, _ = branch
         
@@ -269,12 +269,14 @@ def parse_tree_to_stub_file(parseTree):
         
         elif definitionName == "cclass":
             decleration, docs, body = result
-            stub_file += class2str(decleration[1], "", docs) + "\n"
+            stub_file += class2str(decleration[0], "", docs) + "\n"
             for i, b in enumerate(body):
-                if len(b) > 0 and b[0][0] in ["def", "cdef"]:
+                
+                if isinstance(b, ParseResults) and b.getName() == "cdef_declearation":
                     docs = body[i+1]
                     ret, name, args, gil = b
                     stub_file += '\n' + cdef2str(ret, name, args, gil, docs, indent=1) + '\n'
+                    
             stub_file += '\n'
         
         elif definitionName == "cstruct":
@@ -318,14 +320,8 @@ def parse_tree_to_stub_file(parseTree):
 
     return stub_file
 
-
-if __name__ == "__main__":
-
-    with open("local/test.py", mode="r") as f:
+def cython2stub(file):
+    with open(file, mode="r") as f:
         input_code = f.read()
-
-    # Parse the input code using the defined grammar
-    parseTree = list(cython_parser.scan_string(input_code+"\n\n"))
-
-    stub_file = parse_tree_to_stub_file(parseTree)
-    print(stub_file)
+    tree = list(cython_parser.scan_string(input_code+"\n\n"))
+    return parse_tree_to_stub_file(tree)
