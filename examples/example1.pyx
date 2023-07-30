@@ -71,3 +71,7 @@ cdef extern from "math.h":
 # Defining a public function that uses an external C function
 cpdef double compute_sin(double angle):
     return sin(angle)
+
+# Defining a public function that uses an external C function
+cpdef double compute_sin(double angle):
+    return sin(angle)

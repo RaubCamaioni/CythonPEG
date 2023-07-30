@@ -268,7 +268,7 @@ def struct2str(name, parent, docs, body):
     
     class_str = ""
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
-    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
+    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}\n"
 
     for b in body:
         class_str += "    " + b + '\n'
@@ -318,7 +318,7 @@ def parse_tree_to_stub_file(parseTree):
         
         definitionName = result.getName()
         
-        # print(f"Parsing Definition: {definitionName}")
+        print(f"Parsing Definition: {definitionName}")
         
         if definitionName == "def":
             decleration, docs, body = result
@@ -336,7 +336,7 @@ def parse_tree_to_stub_file(parseTree):
         
         elif definitionName == "cstruct":
             decleration, docs, body = result
-            stub_file += class2str(decleration[1], "", docs, body) + "\n"
+            stub_file += struct2str(decleration[0], "", docs, body) + "\n"
             
         elif definitionName == "class":
             decleration, docs, body = result
@@ -355,24 +355,29 @@ def parse_tree_to_stub_file(parseTree):
 
     return stub_file
 
-def cython2stub(file):
+def cython_file_2_stub(file):
     with open(file, mode="r") as f:
         input_code = f.read()
     tree = list(cython_parser.scan_string(input_code+"\n\n"))
     return parse_tree_to_stub_file(tree)
 
+def cython_string_2_stub(input_code):
+    tree = list(cython_parser.scan_string(input_code+"\n\n"))
+    return parse_tree_to_stub_file(tree)
+
 def test_cython_peg():
     from pathlib import Path
-    example = Path(r"./examples/example1.pyx")
+    
+    # testing file
+    example = Path(r"./examples/example2.pyx")
     
     # generate stub file
-    stub_file = cython2stub(example)
+    stub_file = cython_file_2_stub(example)
     
     # save the type file
-    output_file = example.parent / (example.stem + "peg.pyi")
+    output_file = example.parent / (example.stem + ".pyi")
     with open(output_file, mode='w') as f:
         f.write(stub_file)
 
 if __name__ == "__main__":
-    
     test_cython_peg()
