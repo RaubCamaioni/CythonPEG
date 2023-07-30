@@ -37,11 +37,24 @@ cpdef int sum_array(int[:] arr):
 
     return total
 
+class State(Enum):
+    state1=1
+    state2=2
+
 # Defining a public class with methods
 cdef class Point:
     # Class attributes
     cdef double x
     cdef double y
+
+    cdef class BabyPoint:
+
+        cdef class BabyPoint2:
+            cdef double distance_to_baby(self, double y):
+                return y
+                
+        cdef double distance_to_baby(self, double y):
+            return y
 
     # Class methods with typed arguments and return values
     cdef double distance_to_origin(self):

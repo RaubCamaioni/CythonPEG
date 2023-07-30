@@ -107,12 +107,12 @@ function_body = IndentedBlock(recursive_def_definition, recursive=True)
 function_definition = (function_decleration + Optional(docstring, default="") + function_body)("def")
 
 # cython function definition 
-cython_function_decleration = Group(Suppress((DEF | CDEF | CPDEF)) + Optional(type_definition + ~cython_arguments_definition, default="") + VARIABLE + Group(cython_arguments_definition) + Optional(VARIABLE, default="") + Suppress(":"))("cdef_declearation")
+cython_function_decleration = Group(Suppress((DEF | CDEF | CPDEF)) + Optional(type_definition + ~cython_arguments_definition, default="") + VARIABLE + Group(cython_arguments_definition) + Optional(VARIABLE, default="") + Suppress(":"))("cdef_decleration")
 cython_function_body = IndentedBlock(recursive_cython_def_definition, recursive=True)
 cython_function_definition = (cython_function_decleration + Optional(docstring, default="") + cython_function_body)("cdef")
 
 # cython class definition
-cython_class_decleration = Group(Suppress(CDEF + CLASS) + VARIABLE +  Suppress(":"))
+cython_class_decleration = Group(Suppress(CDEF + CLASS) + VARIABLE +  Suppress(":"))("cclass_decleration")
 cython_class_body = IndentedBlock(recursive_cython_class_definition, recursive=True)
 cython_class_definition = (cython_class_decleration + Optional(docstring, default="") + cython_class_body)("cclass")
 
@@ -197,7 +197,7 @@ def args2str(args, newlines=False):
     joiner = ',\n    ' if newlines else ', '
     return joiner.join(arg2str(arg) for arg in args)
 
-def def2str(name, args, ret, docs, indent=0):
+def def2str(name, args, ret, docs):
     
     return_str = arg2str(ret) if ret else ""
     return_str = f" -> {return_str}" if return_str else ''
@@ -207,7 +207,7 @@ def def2str(name, args, ret, docs, indent=0):
     if len(arg_str) > 100:
         arg_str = args2str(args, newlines=True)
 
-    return textwrap.indent(f"def {name}({arg_str}){return_str}:{doc_str}\n    ...", "    "*indent)
+    return f"def {name}({arg_str}){return_str}:{doc_str}\n    ...\n"
 
 def cythonargs2str(args, newlines=False):
     """convert argument format List[(name, type, default)] into a string representation."""
@@ -222,18 +222,80 @@ def cythonargs2str(args, newlines=False):
     joiner = ',\n    ' if newlines else ', '
     return joiner.join([format_arg(arg) for arg in args])
 
-def cdef2str(ret, name, args, gil, docs, indent=0):
+def cdef2str(ret, name, args, gil, docs):
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
     ret_str = type2str(ret) if ret else "" 
     ret_str = f" -> {ret_str}" if ret_str else ''
     arg_str = cythonargs2str(args)
     if len(arg_str) > 100:
         arg_str = cythonargs2str(args, newlines=True)
-    return textwrap.indent(f"def {name}({arg_str}){ret_str}:{doc_str}\n    ...", "    "*indent)
+    return f"def {name}({arg_str}){ret_str}:{doc_str}\n    ..." + '\n'
 
-def class2str(name, parent, docs):
+def enum2str(name, parent, docs, body):
+    class_str = ""
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
-    return f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
+    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'
+
+    for b in body:
+        class_str += '    ' + b + '\n'
+        
+    return class_str
+            
+def class2str(name, parent, docs, body):
+    
+    class_str = ""
+    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
+
+    definitions_preset = False
+    for i, b in enumerate(body):
+        
+        if not isinstance(b, ParseResults):
+            continue
+            
+        if b.getName() == "def_decleration":
+            definitions_preset = True
+            docs = body[i+1]
+            name, args, ret = b
+            class_str += '\n' + textwrap.indent(def2str(name, args, ret, docs), "    ") + '\n'
+    
+    if not definitions_preset:
+        class_str += "    ..."
+
+    return class_str + '\n'
+
+def struct2str(name, parent, docs, body):
+    
+    class_str = ""
+    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
+
+    for b in body:
+        class_str += "    " + b + '\n'
+    
+    return class_str + '\n'
+
+def cclass2str(name, parent, docs, body):
+    
+    class_str = ""
+    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'*2
+
+    for i, b in enumerate(body):
+    
+        if not isinstance(b, ParseResults):
+            continue
+        
+        parser_name = b.getName()
+        
+        if parser_name == "cclass_decleration":
+            class_str += textwrap.indent(cclass2str(b[0], "", body[i+1], body[i+2]), "    ")
+        
+        if parser_name == "cdef_decleration":
+            ret, name, args, gil = b
+            class_str += textwrap.indent(cdef2str(ret, name, args, gil, body[i+1]), "    ") + '\n'
+        
+    return class_str + '\n'
 
 def recursive_body(body, indent=0):
     body_str = ""
@@ -246,71 +308,42 @@ def recursive_body(body, indent=0):
         elif isinstance(b, str):
             body_str += b + '\n'
             
-    return textwrap.indent(body_str, "    "*indent)
+    return textwrap.indent(body_str, "    "*indent) + '\n'
     
 def parse_tree_to_stub_file(parseTree):
     
     stub_file = ""
     
-    for branch in parseTree:
-        result, _, _ = branch
+    for result, _, _ in parseTree:
         
         definitionName = result.getName()
         
         if definitionName == "def":
             decleration, docs, body = result
             name, args, ret = decleration
-            stub_file += def2str(name, args, ret, docs) + '\n'*2
+            stub_file += def2str(name, args, ret, docs) + '\n'
 
         elif definitionName == "cdef":
             decleration, docs, body = result
             ret, name, args, gil = decleration
-            stub_file += cdef2str(ret, name, args, gil, docs) + '\n'*2
+            stub_file += cdef2str(ret, name, args, gil, docs) + '\n'
         
         elif definitionName == "cclass":
             decleration, docs, body = result
-            stub_file += class2str(decleration[0], "", docs) + "\n"
-            for i, b in enumerate(body):
-                
-                if isinstance(b, ParseResults) and b.getName() == "cdef_declearation":
-                    docs = body[i+1]
-                    ret, name, args, gil = b
-                    stub_file += '\n' + cdef2str(ret, name, args, gil, docs, indent=1) + '\n'
-                    
-            stub_file += '\n'
+            stub_file += cclass2str(decleration[0], "", docs, body) + "\n"
         
         elif definitionName == "cstruct":
             decleration, docs, body = result
-            stub_file += class2str(decleration[1], "", docs) + "\n"
-            for b in body:
-                stub_file += "    " + b + '\n'
-            stub_file += "\n"
+            stub_file += class2str(decleration[1], "", docs, body) + "\n"
             
         elif definitionName == "class":
             decleration, docs, body = result
             name, parent = decleration
-            stub_file += class2str(name, parent, docs) + '\n'
-
-            definitions_preset = False
-
-            if parent == "Enum":
-                definitions_preset = True
-                for b in body:
-                    stub_file += '    ' + b + '\n'
-                    
-            else:
-                for i, b in enumerate(body):
-                    if isinstance(b, ParseResults):
-                        if b.getName() == "def_decleration":
-                            definitions_preset = True
-                            docs = body[i+1]
-                            name, args, ret = b
-                            stub_file += '\n' + def2str(name, args, ret, docs, indent=1) + '\n'
             
-            if not definitions_preset:
-                stub_file += "    ..." + '\n'
-
-            stub_file += '\n'
+            if parent == "Enum":
+                stub_file += enum2str(name, parent, docs, body) + '\n'
+            else:
+                stub_file += struct2str(name, parent, docs, body) + '\n'
             
         elif definitionName == "dataclass":
             name, docs, body = result
@@ -325,3 +358,17 @@ def cython2stub(file):
         input_code = f.read()
     tree = list(cython_parser.scan_string(input_code+"\n\n"))
     return parse_tree_to_stub_file(tree)
+
+if __name__ == "__main__":
+    
+    from pathlib import Path
+    example = Path(r"./examples/example1.pyx")
+    
+    # generate stub file
+    stub_file = cython2stub(example)
+    
+    # save the type file
+    with open(example.with_suffix(".pyi"), mode='w') as f:
+        f.write(stub_file)
+        
+    print(stub_file)
