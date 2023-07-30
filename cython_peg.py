@@ -112,7 +112,7 @@ cython_function_body = IndentedBlock(recursive_cython_def_definition, recursive=
 cython_function_definition = (cython_function_decleration + Optional(docstring, default="") + cython_function_body)("cdef")
 
 # cython class definition
-cython_class_decleration = Group(Suppress(CDEF + CLASS) + VARIABLE +  Suppress(":"))("cclass_decleration")
+cython_class_decleration = Group(Suppress(CDEF + CLASS) + VARIABLE +  EmptyDefault(class_arguments) + Suppress(":"))("cclass_decleration")
 cython_class_body = IndentedBlock(recursive_cython_class_definition, recursive=True)
 cython_class_definition = (cython_class_decleration + Optional(docstring, default="") + cython_class_body)("cclass")
 
@@ -166,7 +166,7 @@ def expression2str(expression):
 def type2str(type_tree):
     type_name, type_bracket, type_default = type_tree
     
-    if type_name == ":":
+    if type_name == ":": # memory view conversion (could return np.ndarray as subsititude)
         type_name = "COLON"
     
     if type_bracket:
@@ -282,7 +282,7 @@ def cclass2str(name, parent, docs, body):
     class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'*2
 
     for i, b in enumerate(body):
-    
+
         if not isinstance(b, ParseResults):
             continue
         
@@ -318,6 +318,8 @@ def parse_tree_to_stub_file(parseTree):
         
         definitionName = result.getName()
         
+        # print(f"Parsing Definition: {definitionName}")
+        
         if definitionName == "def":
             decleration, docs, body = result
             name, args, ret = decleration
@@ -343,7 +345,7 @@ def parse_tree_to_stub_file(parseTree):
             if parent == "Enum":
                 stub_file += enum2str(name, parent, docs, body) + '\n'
             else:
-                stub_file += struct2str(name, parent, docs, body) + '\n'
+                stub_file += class2str(name, parent, docs, body) + '\n'
             
         elif definitionName == "dataclass":
             name, docs, body = result
@@ -359,8 +361,7 @@ def cython2stub(file):
     tree = list(cython_parser.scan_string(input_code+"\n\n"))
     return parse_tree_to_stub_file(tree)
 
-if __name__ == "__main__":
-    
+def test_cython_peg():
     from pathlib import Path
     example = Path(r"./examples/example1.pyx")
     
@@ -368,7 +369,25 @@ if __name__ == "__main__":
     stub_file = cython2stub(example)
     
     # save the type file
-    with open(example.with_suffix(".pyi"), mode='w') as f:
+    output_file = example.parent / (example.stem + "peg.pyi")
+    with open(output_file, mode='w') as f:
         f.write(stub_file)
-        
-    print(stub_file)
+
+def cython_builder():
+    from cythonbuilder.pyigenerator import pyx_to_pyi
+    from pathlib import Path
+    example = Path(r"./examples/example1.pyx")
+    
+    # generate stub file
+    with open(example, mode="r") as f:
+        stub_file = ''.join(pyx_to_pyi(f))
+    
+    # save the type file
+    output_file = example.parent / (example.stem + "builder.pyi")
+    with open(output_file, mode='w') as f:
+        f.write(stub_file)
+
+if __name__ == "__main__":
+    
+    test_cython_peg()
+    #cython_builder()
