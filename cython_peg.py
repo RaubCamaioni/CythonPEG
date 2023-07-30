@@ -373,21 +373,6 @@ def test_cython_peg():
     with open(output_file, mode='w') as f:
         f.write(stub_file)
 
-def cython_builder():
-    from cythonbuilder.pyigenerator import pyx_to_pyi
-    from pathlib import Path
-    example = Path(r"./examples/example1.pyx")
-    
-    # generate stub file
-    with open(example, mode="r") as f:
-        stub_file = ''.join(pyx_to_pyi(f))
-    
-    # save the type file
-    output_file = example.parent / (example.stem + "builder.pyi")
-    with open(output_file, mode='w') as f:
-        f.write(stub_file)
-
 if __name__ == "__main__":
     
     test_cython_peg()
-    #cython_builder()
