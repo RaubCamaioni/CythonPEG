@@ -20,6 +20,18 @@ def extend_empty(tokens, n):
 def EmptyDefault(input, n=1):
     return Optional(input).addParseAction(partial(extend_empty, n=n))
 
+def Cython2PythonType(cython_type):
+    """basic type translation from cython to python"""
+    
+    if cython_type in ["float32", "float64", "double"]:
+        return "float"
+    elif cython_type in ["char", "short", "int", "long"]:
+        return "int"
+    elif cython_type in ["bint"]:
+        return "bool"
+    
+    return cython_type
+
 # literal definitions
 CLASS = Literal("class")
 STRUCT = Literal("struct")
@@ -175,7 +187,7 @@ def type2str(type_tree):
         bracket_str = ""
         
     type_default_str = f'={expression2str(type_default)}' if type_default else ''
-    return f"{type_name}{bracket_str}{type_default_str}"
+    return f"{Cython2PythonType(type_name)}{bracket_str}{type_default_str}"
         
 
 def arg2str(arg):

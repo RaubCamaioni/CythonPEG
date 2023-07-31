@@ -1,3 +1,4 @@
 /myenv/*
 /local/*
+/__pycache__/*
 *.pyi

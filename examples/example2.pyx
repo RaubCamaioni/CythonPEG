@@ -2,11 +2,11 @@ def python_function1(a : Dict[Dict[int, int], int], b = {1: [1, 2, 3]}) -> int:
     """complex type return and assignment parsing"""
     return 1
 
-cdef int function2(int a, int b):
+cdef float64 function2(int a, int b):
     """cdef returns and typing"""
     return 1
 
-cpdef float function3(int a, List[int] = [1, 2, 3, 4]):
+cpdef double function3(int a, List[int] b = [1, 2, 3, 4]):
     """cpdef return, typing, and assignment """
     return 1.0
 

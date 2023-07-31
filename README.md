@@ -11,15 +11,35 @@ There are a few assumptions that need to be made when converting from cython to 
 
 90% of cython files and desired capability from a stub file are present.  
 -function and method function name completion   
--doc string stransfer (only tribble quote supported)  
+-doc string stransfer (only tripple quote supported)  
 
 I have tested against my own cython files.  It works to an acceptable level.  
 Imports, and other small type changes can be modified manually. 
 
+# Type Conversions
+Edit the following function to add custom type conversions from cython to python.
+
+More detailed type conversions can be customized in the type2str function. 
+For example, catching ":" inside type brackets and replaceing type with np.ndarray.
+
+```
+def Cython2PythonType(cython_type):
+    """basic type translation from cython to python"""
+    
+    if cython_type in ["float32", "float64", "double"]:
+        return "float"
+    elif cython_type in ["char", "short", "int", "long"]:
+        return "int"
+    elif cython_type in ["bint"]:
+        return "bool"
+    
+    return cython_type
+```
+
 # Example Usage
 input pyx
 ```
-from cython_peg import cython2stub
+from cython_peg import cython_string_2_stub
 
 cython_file = \
 """
