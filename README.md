@@ -43,16 +43,15 @@ from cython_peg import cython_string_2_stub
 
 cython_file = \
 """
-
 def python_function1(a : Dict[Dict[int, int], int], b = {1: [1, 2, 3]}) -> int:
     """complex type return and assignment parsing"""
     return 1
 
-cdef int function2(int a, int b):
+cdef float64 function2(int a, int b):
     """cdef returns and typing"""
     return 1
 
-cpdef float function3(int a, List[int] = [1, 2, 3, 4]):
+cpdef double function3(int a, List[int] b = [1, 2, 3, 4]):
     """cpdef return, typing, and assignment """
     return 1.0
 
@@ -84,14 +83,19 @@ def python_function1(a: Dict[Dict[int, int], int], b={1 : [1, 2, 3]}) -> int:
     """complex type return and assignment parsing"""
     ...
 
-def function2(a: int, b: int) -> int:
+def function2(a: int, b: int) -> float:
     """cdef returns and typing"""
+    ...
+
+def function3(a: int, b: List[int] = ['1', '2', '3', '4']) -> float:
+    """cpdef return, typing, and assignment """
     ...
 
 class Struct2D:
     """simple struct with cython types"""
     float64** data
     size_t[2] shape
+
 
 class OuterClass:
     """documentation of outer class"""
@@ -103,10 +107,10 @@ class OuterClass:
             """inner method"""
             ...
 
+
     def method2(a: float, b: float) -> int:
         """outer method"""
         ...
-
 ```
 
 # maintenance and updates
