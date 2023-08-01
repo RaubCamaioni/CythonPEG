@@ -283,7 +283,7 @@ def class2str(result: ParseResults):
     name, parent = decleration
     
     if parent == "Enum":
-        return enum2str(result) + '\n'
+        return enum2str(result)
             
     doc_str = f'\n{INDENT}\"""{docs}\"""\n\n' if docs else ''
     class_str = f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
@@ -304,11 +304,11 @@ def class2str(result: ParseResults):
             element_string.append(textwrap.indent(def2str(result), INDENT))
     
     if not len(element_string):
-        class_str += f"{INDENT}..."
+        class_str += f"{INDENT}...\n"
     else:
         class_str += "\n".join(element_string)
 
-    return class_str + '\n'
+    return class_str
 
 def struct2str(result):
     """cython_struct_definition parsed tree to string"""
@@ -353,11 +353,11 @@ def cclass2str(result: ParseResults):
             element_string.append(textwrap.indent(cdef2str(result), INDENT))
     
     if not len(element_string):
-        class_str += f"{INDENT}..."
+        class_str += f"{INDENT}...\n"
     else:
         class_str += "\n".join(element_string)
         
-    return class_str + '\n'
+    return class_str
 
 def dataclass2str(result: ParseResults):
     name, docs, body = result
