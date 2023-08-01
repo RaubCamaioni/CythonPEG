@@ -278,6 +278,9 @@ def class2str(result: ParseResults):
     
     decleration, docs, body = result
     name, parent = decleration
+    
+    if parent == "Enum":
+        return enum2str(result) + '\n'
             
     class_str = ""
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
@@ -372,38 +375,29 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     tree = list(cython_parser.scan_string(input_code))
     mutable_string = list(input_code+" ")
     
-    stub_file = ""
-    for result, start, end in tree:
-
-        definitionName = result.getName()
-
-        # pure python does not support broadcast assignment ...
+    # dictionary switch
+    parser = {
+        "def": def2str,
+        "cdef": cdef2str,
+        "cclass": cclass2str,
+        "cstruct": struct2str, 
+        "class": class2str,
+        "dataclass": dataclass2str,
+    }
+    
+    # ParseResults -> Python Stub Element
+    def parse_branch(branch: Tuple[ParseResults, int, int]):
+        result, start, end = branch
+    
         for i in range(start, end):
             mutable_string[i] = ""
-        
-        if definitionName == "def":
-            stub_file += def2str(result) + '\n'
-
-        elif definitionName == "cdef":
-            stub_file += cdef2str(result) + '\n'
-        
-        elif definitionName == "cclass":
-            stub_file += cclass2str(result) + "\n"
-        
-        elif definitionName == "cstruct":
-            stub_file += struct2str(result) + "\n"
-            
-        elif definitionName == "class":
-            decleration, _, _ = result
-            _, parent = decleration            
-            
-            if parent == "Enum":
-                stub_file += enum2str(result) + '\n'
-            else:
-                stub_file += class2str(result) + '\n'
-            
-        elif definitionName == "dataclass":
-            stub_file += dataclass2str(result) + '\n'
+    
+        definitionName = result.getName()        
+        if definitionName in parser:
+           return parser[definitionName](result)
+       
+    # join Python Stub Elements
+    stub_file = "\n".join(parse_branch(b) for b in tree)
 
     return stub_file, "".join(mutable_string).strip()
 
