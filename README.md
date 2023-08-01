@@ -12,10 +12,10 @@ There are a few assumptions that need to be made when converting from cython to 
 # Why generate Stub Files?
 Most langauge servers don't understand cython code.  
 
-By including STUB files with your cython compiled module you maintain:
--module, function, class, method auto completion
--argument names/number and type hinting
--doc strings
+By including STUB files with your cython compiled module you maintain:  
+-module, function, class, method auto completion  
+-argument names/number and type hinting  
+-doc strings  
 
 # Colab Notebook to try the Parsing Code
 https://colab.research.google.com/drive/1KvSUznOoeJ_F8GxzA9IafbMXA6mTR_Nj?usp=sharing
