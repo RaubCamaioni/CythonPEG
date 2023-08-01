@@ -1,8 +1,31 @@
 from pyparsing import *
 import textwrap
 from functools import partial
-from typing import Union, List, IO, Tuple
+from typing import Union, List, IO, Tuple, Callable
 import re
+
+def partial_cython_2_python(type_str: str) -> str:
+    """partial type component"""
+    return type_str
+
+def complete_cython_2_python(type_str: str) -> str:
+    """complete type component"""
+    return type_str
+
+# indent used
+INDENT = "    "
+
+def set_indent(indent: str):
+    global INDENT
+    INDENT = indent
+    
+def set_type_converter_partial(func: Callable[[str], str]):
+    global partial_cython_2_python
+    partial_cython_2_python = func
+    
+def set_type_converter_complete(func: Callable[[str], str]):
+    global complete_cython_2_python
+    complete_cython_2_python = func
 
 # helper functions
 def parentheses_suppress(content: ParserElement) -> ParserElement:
@@ -22,21 +45,6 @@ def extend_empty(tokens: List[ParserElement], n: int):
 def EmptyDefault(input: ParserElement, n: int=1) -> ParserElement:
     """returns empty string ParserResult of size n"""
     return Optional(input).addParseAction(partial(extend_empty, n=n))
-
-def Cython2PythonType(cython_type: str) -> str:
-    """basic type translation from cython to python"""
-    
-    if cython_type in ["float32", "float64", "double"]:
-        return "float"
-    elif cython_type in ["char", "short", "int", "long"]:
-        return "int"
-    elif cython_type in ["bint"]:
-        return "bool"
-    
-    return cython_type
-
-# indent used
-INDENT = "    "
 
 # literal definitions
 CLASS = Literal("class")
@@ -184,19 +192,20 @@ def expression2str(expression: Union[ParseResults, str]):
 
 def type2str(type_tree: ParseResults):
     """type_definition parsed tree to string"""
-    type_name, type_bracket, type_default = type_tree
     
-    if type_name == ":": # memory view conversion (could return np.ndarray as subsititude)
-        type_name = "COLON"
+    def _type2_str(type_tree: ParseResults):
+        type_name, type_bracket, type_default = type_tree
+        
+        if type_bracket:
+            bracket_str = "["+", ".join(_type2_str(arg) for arg in type_bracket)+"]" if type_bracket else ""
+        else:
+            bracket_str = ""
+            
+        type_default_str = f'={expression2str(type_default)}' if type_default else ''
+        
+        return f"{partial_cython_2_python(type_name)}{bracket_str}{type_default_str}"
     
-    if type_bracket:
-        bracket_str = "["+", ".join(type2str(arg) for arg in type_bracket)+"]" if type_bracket else ""
-    else:
-        bracket_str = ""
-        
-    type_default_str = f'={expression2str(type_default)}' if type_default else ''
-    return f"{Cython2PythonType(type_name)}{bracket_str}{type_default_str}"
-        
+    return complete_cython_2_python(_type2_str(type_tree))
 
 def arg2str(arg: ParseResults):
     """python_argument_definition parsed tree to string"""
