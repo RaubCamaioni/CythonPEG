@@ -158,10 +158,9 @@ cython_parser = python_class_definition | python_function_definition | cython_fu
 def expression2str(expression: Union[ParseResults, str]):
     """EXPRESSION parsed tree to string"""
     
-    expression_string = ""
-    
     if isinstance(expression, ParseResults):
-             
+        expression_string = ""
+
         if expression.getName() == 'list':
             expression_string += "[" + ', '.join(expression2str(e) for e in expression) + "]"
 
@@ -174,14 +173,14 @@ def expression2str(expression: Union[ParseResults, str]):
         elif expression.getName() == 'dict':
             expression_string += "{" + ', '.join(f"{expression2str(k)} : {expression2str(v)}" for k, v in expression) + "}"
         
-        elif isinstance(expression, ParseResults):
+        else:
             for e in expression:
                 expression_string += expression2str(e)
+
+        return expression_string
             
-    if isinstance(expression, str):
+    elif isinstance(expression, str):
         return expression
-    
-    return expression_string
 
 def type2str(type_tree: ParseResults):
     """type_definition parsed tree to string"""
@@ -242,7 +241,7 @@ def cythonargs2str(args: ParseResults, newlines: bool=False):
         if arg[0] == "self": return "self" # handle unique case cdef inside class
         t, n, d = arg
         type_str = type2str(t)
-        default_str = f' = {d}' if d else ''
+        default_str = f' = {expression2str(d)}' if d else ''
         return f'{n}: {type_str}{default_str}'
 
     joiner = f',\n{INDENT}' if newlines else ', '
