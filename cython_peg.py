@@ -35,6 +35,9 @@ def Cython2PythonType(cython_type: str) -> str:
     
     return cython_type
 
+# indent used
+INDENT = "    "
+
 # literal definitions
 CLASS = Literal("class")
 STRUCT = Literal("struct")
@@ -213,7 +216,7 @@ def arg2str(arg: ParseResults):
     
 def args2str(args: ParseResults, newlines: bool=False):
     """python_arguments_definition parsed tree to string"""
-    joiner = ',\n    ' if newlines else ', '
+    joiner = f',\n{INDENT}' if newlines else ', '
     return joiner.join(arg2str(arg) for arg in args)
 
 def def2str(result: ParseResults):
@@ -224,13 +227,13 @@ def def2str(result: ParseResults):
             
     return_str = arg2str(ret) if ret else ""
     return_str = f" -> {return_str}" if return_str else ''
-    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     
     arg_str = args2str(args)
     if len(arg_str) > 100:
         arg_str = args2str(args, newlines=True)
 
-    return f"def {name}({arg_str}){return_str}:{doc_str}\n    ...\n"
+    return f"def {name}({arg_str}){return_str}:{doc_str}\n{INDENT}...\n"
 
 def cythonargs2str(args: ParseResults, newlines: bool=False):
     """cython_arguments_definition parsed tree to string"""
@@ -242,7 +245,7 @@ def cythonargs2str(args: ParseResults, newlines: bool=False):
         default_str = f' = {d}' if d else ''
         return f'{n}: {type_str}{default_str}'
 
-    joiner = ',\n    ' if newlines else ', '
+    joiner = f',\n{INDENT}' if newlines else ', '
     return joiner.join([format_arg(arg) for arg in args])
 
 def cdef2str(result: ParseResults):
@@ -250,13 +253,13 @@ def cdef2str(result: ParseResults):
     decleration, docs, body = result
     ret, name, args, gil = decleration
             
-    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     ret_str = type2str(ret) if ret else "" 
     ret_str = f" -> {ret_str}" if ret_str else ''
     arg_str = cythonargs2str(args)
     if len(arg_str) > 100:
         arg_str = cythonargs2str(args, newlines=True)
-    return f"def {name}({arg_str}){ret_str}:{doc_str}\n    ..." + '\n'
+    return f"def {name}({arg_str}){ret_str}:{doc_str}\n{INDENT}..." + '\n'
 
 def enum2str(result: ParseResults):
     """python_class_definition parsed tree to string (enum)"""
@@ -265,11 +268,11 @@ def enum2str(result: ParseResults):
     name, parent = decleration
             
     class_str = ""
-    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'
 
     for b in body:
-        class_str += '    ' + b + '\n'
+        class_str += INDENT + b + '\n'
         
     return class_str
             
@@ -283,7 +286,7 @@ def class2str(result: ParseResults):
         return enum2str(result) + '\n'
             
     class_str = ""
-    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
 
     definitions_preset = False
@@ -296,10 +299,10 @@ def class2str(result: ParseResults):
             definitions_preset = True
             docs = body[i+1]
             name, args, ret = b
-            class_str += '\n' + textwrap.indent(def2str(name, args, ret, docs), "    ") + '\n'
+            class_str += '\n' + textwrap.indent(def2str(name, args, ret, docs), INDENT) + '\n'
     
     if not definitions_preset:
-        class_str += "    ..."
+        class_str += f"{INDENT}..."
 
     return class_str + '\n'
 
@@ -310,11 +313,11 @@ def struct2str(result):
     parent = ""
     
     class_str = ""
-    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     class_str += f"class {decleration[0]}{f'({parent})' if parent else ''}:{doc_str}\n"
 
     for b in body:
-        class_str += "    " + b + '\n'
+        class_str += INDENT + b + '\n'
     
     return class_str + '\n'
 
@@ -325,7 +328,7 @@ def cclass2str(result: ParseResults):
     name, parent = decleration
                 
     class_str = ""
-    doc_str = f'\n    \"""{docs}\"""' if docs else ''
+    doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'*2
 
     for i, b in enumerate(body):
@@ -337,11 +340,11 @@ def cclass2str(result: ParseResults):
         
         if parser_name == "cclass_decleration":
             result = (b, body[i+1], body[i+2])
-            class_str += textwrap.indent(cclass2str(result), "    ")
+            class_str += textwrap.indent(cclass2str(result), INDENT)
         
         if parser_name == "cdef_decleration":
             result = (b, body[i+1], body[i+2])
-            class_str += textwrap.indent(cdef2str(result), "    ") + '\n'
+            class_str += textwrap.indent(cdef2str(result), INDENT) + '\n'
         
     return class_str + '\n'
 
@@ -350,8 +353,8 @@ def dataclass2str(result: ParseResults):
     dataclass_str = ""
     dataclass_str += "@dataclass" + '\n'
     dataclass_str += f"class {name}:" + '\n'
-    dataclass_str += f'    \"""{docs}\"""\n' 
-    dataclass_str += textwrap.indent(recursive_body(body), "    ") + '\n'
+    dataclass_str += f'{INDENT}\"""{docs}\"""\n' 
+    dataclass_str += textwrap.indent(recursive_body(body), INDENT) + '\n'
     return dataclass_str
 
 def recursive_body(body: ParseResults):
@@ -360,7 +363,7 @@ def recursive_body(body: ParseResults):
     for b in body:
         
         if isinstance(b, ParseResults):
-            body_str += textwrap.indent(recursive_body(b), "    ")
+            body_str += textwrap.indent(recursive_body(b), INDENT)
             
         elif isinstance(b, str):
             body_str += b + '\n'
@@ -373,9 +376,8 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     # force blank lines EOF for indentblock parser
     input_code += "\n"
     tree = list(cython_parser.scan_string(input_code))
-    mutable_string = list(input_code+" ")
     
-    # dictionary switch
+    # 3.8+ compatible switch
     parser = {
         "def": def2str,
         "cdef": cdef2str,
@@ -386,6 +388,8 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     }
     
     # ParseResults -> Python Stub Element
+    # TODO: remove outer reference to mutable_string
+    mutable_string = list(input_code+" ")
     def parse_branch(branch: Tuple[ParseResults, int, int]):
         result, start, end = branch
     
@@ -421,9 +425,7 @@ def example_testing():
     # lines in the original file that did not match a parsing rule
     print(f"Percentage Parsed: {1 - len(unparsed_lines)/len(input_string)}")
     print(f"Unparsed Lines:")
-    print('"""')
-    print(textwrap.indent(unparsed_lines, "    "))
-    print('"""')
+    print(f'\"""\n{textwrap.indent(unparsed_lines, INDENT)}\n\"""')
     
     # save the type file
     with open(input_file.with_suffix(".pyi"), mode='w') as f:
