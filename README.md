@@ -75,7 +75,8 @@ cdef float[:, :] memmoryviewfunction(float[:, :]):
     return None
 """
 
-print(cython_string_2_stub(cython_file))
+stub_file, unparsed_lines = cython_string_2_stub(cython_file)
+print(stub_file)
 ```
 output pyi
 ```
