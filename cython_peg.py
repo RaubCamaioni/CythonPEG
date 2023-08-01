@@ -1,7 +1,7 @@
 from pyparsing import *
 import textwrap
 from functools import partial
-from typing import Union, List, IO, Generator, Tuple
+from typing import Union, List, IO, Tuple
 import re
 
 # helper functions
@@ -58,7 +58,7 @@ RETURN = Literal("->")
 SELF = Literal("self")
 
 # object definitions
-VARIABLE = Word("_"+alphanums+"_"+".")
+VARIABLE = Word("_"+alphanums+"_"+"*"+".")
 INTEGER = Word("+-" + nums) + ~FollowedBy(".")
 FLOAT = Combine(Word("+-" + nums) + "." + Word(nums))
 TRUE = Literal("True")
@@ -136,7 +136,7 @@ cython_class_definition = (cython_class_decleration + Optional(docstring, defaul
 
 # cython struct definition
 cython_struct_decleration = Group(Suppress(CDEF + STRUCT) + VARIABLE + Suppress(":"))
-cython_struct_body = IndentedBlock(recursive_cython_struct_definition, recursive=True)
+cython_struct_body = IndentedBlock(Group(type_definition + VARIABLE), recursive=True)
 cython_struct_definition = (cython_struct_decleration + Optional(docstring, default="") + cython_struct_body)("cstruct")
 
 # dataclass definition
@@ -285,24 +285,28 @@ def class2str(result: ParseResults):
     if parent == "Enum":
         return enum2str(result) + '\n'
             
-    class_str = ""
-    doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
-    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
+    doc_str = f'\n{INDENT}\"""{docs}\"""\n\n' if docs else ''
+    class_str = f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
 
-    definitions_preset = False
+    element_string = []
     for i, b in enumerate(body):
         
         if not isinstance(b, ParseResults):
             continue
-            
-        if b.getName() == "def_decleration":
-            definitions_preset = True
-            docs = body[i+1]
-            name, args, ret = b
-            class_str += '\n' + textwrap.indent(def2str(name, args, ret, docs), INDENT) + '\n'
+        
+        parser_name = b.getName()
+        if parser_name == "class_decleration":
+            result = (b, body[i+1], body[i+2])
+            element_string.append(textwrap.indent(class2str(result), INDENT))
+
+        elif parser_name == "def_decleration":
+            result = (b, body[i+1], body[i+2])
+            element_string.append(textwrap.indent(def2str(result), INDENT))
     
-    if not definitions_preset:
+    if not len(element_string):
         class_str += f"{INDENT}..."
+    else:
+        class_str += "\n".join(element_string)
 
     return class_str + '\n'
 
@@ -316,10 +320,12 @@ def struct2str(result):
     doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     class_str += f"class {decleration[0]}{f'({parent})' if parent else ''}:{doc_str}\n"
 
+    element_string = []
     for b in body:
-        class_str += INDENT + b + '\n'
+        type_str, name = b
+        element_string.append(f"{INDENT}{name}: {type2str(type_str)}")
     
-    return class_str + '\n'
+    return class_str + "\n".join(element_string) + '\n'
 
 def cclass2str(result: ParseResults):
     """cython_class_definition parsed tree to string"""
@@ -331,20 +337,25 @@ def cclass2str(result: ParseResults):
     doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'*2
 
+    element_string = []
     for i, b in enumerate(body):
 
         if not isinstance(b, ParseResults):
             continue
         
         parser_name = b.getName()
-        
         if parser_name == "cclass_decleration":
             result = (b, body[i+1], body[i+2])
-            class_str += textwrap.indent(cclass2str(result), INDENT)
+            element_string.append(textwrap.indent(cclass2str(result), INDENT))
         
-        if parser_name == "cdef_decleration":
+        elif parser_name == "cdef_decleration":
             result = (b, body[i+1], body[i+2])
-            class_str += textwrap.indent(cdef2str(result), INDENT) + '\n'
+            element_string.append(textwrap.indent(cdef2str(result), INDENT))
+    
+    if not len(element_string):
+        class_str += f"{INDENT}..."
+    else:
+        class_str += "\n".join(element_string)
         
     return class_str + '\n'
 
@@ -354,21 +365,21 @@ def dataclass2str(result: ParseResults):
     dataclass_str += "@dataclass" + '\n'
     dataclass_str += f"class {name}:" + '\n'
     dataclass_str += f'{INDENT}\"""{docs}\"""\n' 
-    dataclass_str += textwrap.indent(recursive_body(body), INDENT) + '\n'
+    dataclass_str += textwrap.indent(recursive_body(body), INDENT)
     return dataclass_str
 
 def recursive_body(body: ParseResults):
     """IndentedBlock(restOfLine) parsed tree to string"""
-    body_str = ""
+    element_string = []
     for b in body:
         
         if isinstance(b, ParseResults):
-            body_str += textwrap.indent(recursive_body(b), INDENT)
+            element_string.append(textwrap.indent(recursive_body(b), INDENT))
             
         elif isinstance(b, str):
-            body_str += b + '\n'
+            element_string.append(b)
             
-    return body_str + '\n'
+    return '\n'.join(element_string) + '\n'
     
 def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     """tree traversal and translation of ParseResults to string representation"""

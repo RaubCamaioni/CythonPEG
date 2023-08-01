@@ -31,6 +31,21 @@ class DataStructure:
     b: int
     c: str
 
+class SimpleClass:
+    """simple docs"""
+
+    class SimpleInnerClass(Enum):
+        """inner enum for organizing"""
+        a: int
+        b: int
+
+    def __init__(self, a):
+        pass
+
+    def simple_method(self, a: int) -> int:
+        """simple method docs"""
+        return 1
+
 cdef class OuterClass(object):
     """documentation of outer class"""
 
