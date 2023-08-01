@@ -9,7 +9,7 @@ There are a few assumptions that need to be made when converting from cython to 
 -How to handle syntax that does not exist in python?  
 &emsp;-structs are translated to classes
 
-# Why generate Stub Files?
+# Why generate stub files?
 Most langauge servers don't understand cython code.  
 
 By including STUB files with your cython compiled module you maintain:  
@@ -17,11 +17,11 @@ By including STUB files with your cython compiled module you maintain:
 -argument names/number and type hinting  
 -doc strings  
 
-# Colab Notebook to try the Parsing Code
+# Colab notebook to test code
 https://colab.research.google.com/drive/1KvSUznOoeJ_F8GxzA9IafbMXA6mTR_Nj?usp=sharing
 
-# Customize Your Type Conversions
-Customizable convertion between cython and python types.  
+# Customize you type conversions
+Customizable conversions between cython and python types.  
 Use the setter function provided to change the type conversion function.  
 An example is given inside "usage/examples.ipynb"
 
@@ -34,7 +34,7 @@ Add the stub generation script into your cython setup.py file.
 from pathlib import Path
 import cython_peg as cp
 
-# set indent used
+# set indent used in stub file
 cp.set_indent("  ")
 
 for file in Path(r"module_directory").glob("*.pyx"):
