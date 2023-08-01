@@ -1,26 +1,29 @@
 from pyparsing import *
 import textwrap
 from functools import partial
+from typing import Union, List, IO, Generator, Tuple
+import re
 
 # helper functions
-def parentheses_suppress(content):
+def parentheses_suppress(content: ParserElement) -> ParserElement:
     return Suppress("(") + Optional(content) + Suppress(")")
 
-def bracket_suppress(content):
+def bracket_suppress(content: ParserElement) -> ParserElement:
     return Suppress("[") + Optional(content) + Suppress("]")
 
-def curl_suppress(content):
+def curl_suppress(content: ParserElement) -> ParserElement:
     return Suppress("{") + Optional(content) + Suppress("}")
 
-def extend_empty(tokens, n):
+def extend_empty(tokens: List[ParserElement], n: int):
     if len(tokens) == 0:
         tokens.extend([""]*n)
     return tokens
 
-def EmptyDefault(input, n=1):
+def EmptyDefault(input: ParserElement, n: int=1) -> ParserElement:
+    """returns empty string ParserResult of size n"""
     return Optional(input).addParseAction(partial(extend_empty, n=n))
 
-def Cython2PythonType(cython_type):
+def Cython2PythonType(cython_type: str) -> str:
     """basic type translation from cython to python"""
     
     if cython_type in ["float32", "float64", "double"]:
@@ -76,10 +79,10 @@ EXPRESSION = Forward()
 ATOM = OBJECT | Group(Literal('(') + EXPRESSION + Literal(')'))
 EXPRESSION << infixNotation(ATOM, [(MULT | DIV, 2, opAssoc.LEFT), (PLUS | MINUS, 2, opAssoc.LEFT),])
 
-# default_definition (part of type definition)
+# default_definition (python and cython)
 default_definition = (EQUALS + EXPRESSION)("default")
 
-# type definitions
+# type definitions (python and cython)
 type_forward = Forward()
 type_bracket = bracket_suppress(delimited_list(type_forward))
 type_definition = Group((VARIABLE | MEMMORYVIEW) + EmptyDefault(Group(type_bracket)) + EmptyDefault(default_definition + ~Literal(')')))("type")
@@ -107,16 +110,16 @@ recursive_cython_struct_definition = Forward()
 docstring = QuotedString('"""', multiline=True, escQuote='""""')
 
 # python class definition
-class_parent = Word(alphanums+'_'+'*'+'.')
-class_arguments = parentheses_suppress(class_parent)
-class_decleration = Group(Suppress(CLASS) + VARIABLE + EmptyDefault(class_arguments) + Suppress(":"))("class_decleration")
-class_body = IndentedBlock(recursive_class_definition, recursive=True)
-class_definition = (class_decleration + Optional(docstring, default="") + class_body)("class")
+python_class_parent = Word(alphanums+'_'+'.')
+python_class_arguments = parentheses_suppress(python_class_parent)
+python_class_decleration = Group(Suppress(CLASS) + VARIABLE + EmptyDefault(python_class_arguments) + Suppress(":"))("class_decleration")
+python_class_body = IndentedBlock(recursive_class_definition, recursive=True)
+python_class_definition = (python_class_decleration + Optional(docstring, default="") + python_class_body)("class")
 
 # python function definitions
-function_decleration = Group(Suppress(DEF) + VARIABLE + Group(python_arguments_definition) + Optional(python_return_definition, "") + Suppress(":"))("def_decleration")
-function_body = IndentedBlock(recursive_def_definition, recursive=True)
-function_definition = (function_decleration + Optional(docstring, default="") + function_body)("def")
+python_function_decleration = Group(Suppress(DEF) + VARIABLE + Group(python_arguments_definition) + Optional(python_return_definition, "") + Suppress(":"))("def_decleration")
+python_function_body = IndentedBlock(recursive_def_definition, recursive=True)
+python_function_definition = (python_function_decleration + Optional(docstring, default="") + python_function_body)("def")
 
 # cython function definition 
 cython_function_decleration = Group(Suppress((DEF | CDEF | CPDEF)) + Optional(type_definition + ~cython_arguments_definition, default="") + VARIABLE + Group(cython_arguments_definition) + Optional(VARIABLE, default="") + Suppress(":"))("cdef_decleration")
@@ -124,7 +127,7 @@ cython_function_body = IndentedBlock(recursive_cython_def_definition, recursive=
 cython_function_definition = (cython_function_decleration + Optional(docstring, default="") + cython_function_body)("cdef")
 
 # cython class definition
-cython_class_decleration = Group(Suppress(CDEF + CLASS) + VARIABLE +  EmptyDefault(class_arguments) + Suppress(":"))("cclass_decleration")
+cython_class_decleration = Group(Suppress(CDEF + CLASS) + VARIABLE +  EmptyDefault(python_class_arguments) + Suppress(":"))("cclass_decleration")
 cython_class_body = IndentedBlock(recursive_cython_class_definition, recursive=True)
 cython_class_definition = (cython_class_decleration + Optional(docstring, default="") + cython_class_body)("cclass")
 
@@ -138,17 +141,19 @@ dataclass_decleration = (Suppress(Literal("@") + DATACLASS + CLASS) + VARIABLE +
 dataclass_body = IndentedBlock(rest_of_line, recursive=True)
 dataclass_definition = (dataclass_decleration + Optional(docstring, default="") + dataclass_body)("dataclass")
 
-# recursive definitions
-definitions = (class_definition | function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | restOfLine)
+# recursive definitions (could be individually assigned for parsing performance improvements: i.e cython_class never defined inside python_function)
+definitions = (python_class_definition | python_function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | restOfLine)
 recursive_class_definition         << definitions
 recursive_def_definition           << definitions
 recursive_cython_def_definition    << definitions
 recursive_cython_class_definition  << definitions
 recursive_cython_struct_definition << definitions
 
-cython_parser = class_definition | function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | dataclass_definition
+# full recursive definition
+cython_parser = python_class_definition | python_function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | dataclass_definition
 
-def expression2str(expression):
+def expression2str(expression: Union[ParseResults, str]):
+    """EXPRESSION parsed tree to string"""
     
     expression_string = ""
     
@@ -175,7 +180,8 @@ def expression2str(expression):
     
     return expression_string
 
-def type2str(type_tree):
+def type2str(type_tree: ParseResults):
+    """type_definition parsed tree to string"""
     type_name, type_bracket, type_default = type_tree
     
     if type_name == ":": # memory view conversion (could return np.ndarray as subsititude)
@@ -190,12 +196,13 @@ def type2str(type_tree):
     return f"{Cython2PythonType(type_name)}{bracket_str}{type_default_str}"
         
 
-def arg2str(arg):
+def arg2str(arg: ParseResults):
+    """python_argument_definition parsed tree to string"""
 
     arg_name, arg_type, arg_default = arg
 
     if isinstance(arg_type, ParseResults):
-        type_str = type2str(arg_type)        
+        type_str = type2str(arg_type)
     else:
         type_str = ""
 
@@ -204,13 +211,17 @@ def arg2str(arg):
 
     return f'{arg_name}{type_str}{arg_default_str}'
     
-def args2str(args, newlines=False):
-    """convert argument format List[(name, type, default)] into a string representation."""
+def args2str(args: ParseResults, newlines: bool=False):
+    """python_arguments_definition parsed tree to string"""
     joiner = ',\n    ' if newlines else ', '
     return joiner.join(arg2str(arg) for arg in args)
 
-def def2str(name, args, ret, docs):
+def def2str(result: ParseResults):
+    """function_definition parsed tree to string"""
     
+    decleration, docs, body = result
+    name, args, ret = decleration
+            
     return_str = arg2str(ret) if ret else ""
     return_str = f" -> {return_str}" if return_str else ''
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
@@ -221,8 +232,8 @@ def def2str(name, args, ret, docs):
 
     return f"def {name}({arg_str}){return_str}:{doc_str}\n    ...\n"
 
-def cythonargs2str(args, newlines=False):
-    """convert argument format List[(name, type, default)] into a string representation."""
+def cythonargs2str(args: ParseResults, newlines: bool=False):
+    """cython_arguments_definition parsed tree to string"""
 
     def format_arg(arg):
         if arg[0] == "self": return "self" # handle unique case cdef inside class
@@ -234,7 +245,11 @@ def cythonargs2str(args, newlines=False):
     joiner = ',\n    ' if newlines else ', '
     return joiner.join([format_arg(arg) for arg in args])
 
-def cdef2str(ret, name, args, gil, docs):
+def cdef2str(result: ParseResults):
+    """cython_function_definition parsed tree to string"""
+    decleration, docs, body = result
+    ret, name, args, gil = decleration
+            
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
     ret_str = type2str(ret) if ret else "" 
     ret_str = f" -> {ret_str}" if ret_str else ''
@@ -243,7 +258,12 @@ def cdef2str(ret, name, args, gil, docs):
         arg_str = cythonargs2str(args, newlines=True)
     return f"def {name}({arg_str}){ret_str}:{doc_str}\n    ..." + '\n'
 
-def enum2str(name, parent, docs, body):
+def enum2str(result: ParseResults):
+    """python_class_definition parsed tree to string (enum)"""
+    
+    decleration, docs, body = result
+    name, parent = decleration
+            
     class_str = ""
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
     class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'
@@ -253,8 +273,12 @@ def enum2str(name, parent, docs, body):
         
     return class_str
             
-def class2str(name, parent, docs, body):
+def class2str(result: ParseResults):
+    """python_class_definition parsed tree to string (enum)"""
     
+    decleration, docs, body = result
+    name, parent = decleration
+            
     class_str = ""
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
     class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
@@ -276,19 +300,27 @@ def class2str(name, parent, docs, body):
 
     return class_str + '\n'
 
-def struct2str(name, parent, docs, body):
+def struct2str(result):
+    """cython_struct_definition parsed tree to string"""
+    
+    decleration, docs, body = result
+    parent = ""
     
     class_str = ""
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
-    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}\n"
+    class_str += f"class {decleration[0]}{f'({parent})' if parent else ''}:{doc_str}\n"
 
     for b in body:
         class_str += "    " + b + '\n'
     
     return class_str + '\n'
 
-def cclass2str(name, parent, docs, body):
+def cclass2str(result: ParseResults):
+    """cython_class_definition parsed tree to string"""
     
+    decleration, docs, body = result
+    name, parent = decleration
+                
     class_str = ""
     doc_str = f'\n    \"""{docs}\"""' if docs else ''
     class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'*2
@@ -301,95 +333,107 @@ def cclass2str(name, parent, docs, body):
         parser_name = b.getName()
         
         if parser_name == "cclass_decleration":
-            class_str += textwrap.indent(cclass2str(b[0], "", body[i+1], body[i+2]), "    ")
+            result = (b, body[i+1], body[i+2])
+            class_str += textwrap.indent(cclass2str(result), "    ")
         
         if parser_name == "cdef_decleration":
-            ret, name, args, gil = b
-            class_str += textwrap.indent(cdef2str(ret, name, args, gil, body[i+1]), "    ") + '\n'
+            result = (b, body[i+1], body[i+2])
+            class_str += textwrap.indent(cdef2str(result), "    ") + '\n'
         
     return class_str + '\n'
 
-def recursive_body(body, indent=0):
+def dataclass2str(result: ParseResults):
+    name, docs, body = result
+    dataclass_str = ""
+    dataclass_str += "@dataclass" + '\n'
+    dataclass_str += f"class {name}:" + '\n'
+    dataclass_str += f'    \"""{docs}\"""\n' 
+    dataclass_str += textwrap.indent(recursive_body(body), "    ") + '\n'
+    return dataclass_str
+
+def recursive_body(body: ParseResults):
+    """IndentedBlock(restOfLine) parsed tree to string"""
     body_str = ""
     for b in body:
         
         if isinstance(b, ParseResults):
-            body_str_indented = recursive_body(b, indent=indent+1)
-            body_str += body_str_indented
+            body_str += textwrap.indent(recursive_body(b), "    ")
             
         elif isinstance(b, str):
             body_str += b + '\n'
             
-    return textwrap.indent(body_str, "    "*indent) + '\n'
+    return body_str + '\n'
     
-def parse_tree_to_stub_file(parseTree):
+def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
+    """tree traversal and translation of ParseResults to string representation"""
+    
+    # force blank lines EOF for indentblock parser
+    input_code += "\n"
+    tree = list(cython_parser.scan_string(input_code))
+    mutable_string = list(input_code+" ")
     
     stub_file = ""
-    
-    for result, _, _ in parseTree:
-        
+    for result, start, end in tree:
+
         definitionName = result.getName()
-        
-        print(f"Parsing Definition: {definitionName}")
+
+        # pure python does not support broadcast assignment ...
+        for i in range(start, end):
+            mutable_string[i] = ""
         
         if definitionName == "def":
-            decleration, docs, body = result
-            name, args, ret = decleration
-            stub_file += def2str(name, args, ret, docs) + '\n'
+            stub_file += def2str(result) + '\n'
 
         elif definitionName == "cdef":
-            decleration, docs, body = result
-            ret, name, args, gil = decleration
-            stub_file += cdef2str(ret, name, args, gil, docs) + '\n'
+            stub_file += cdef2str(result) + '\n'
         
         elif definitionName == "cclass":
-            decleration, docs, body = result
-            stub_file += cclass2str(decleration[0], "", docs, body) + "\n"
+            stub_file += cclass2str(result) + "\n"
         
         elif definitionName == "cstruct":
-            decleration, docs, body = result
-            stub_file += struct2str(decleration[0], "", docs, body) + "\n"
+            stub_file += struct2str(result) + "\n"
             
         elif definitionName == "class":
-            decleration, docs, body = result
-            name, parent = decleration
+            decleration, _, _ = result
+            _, parent = decleration            
             
             if parent == "Enum":
-                stub_file += enum2str(name, parent, docs, body) + '\n'
+                stub_file += enum2str(result) + '\n'
             else:
-                stub_file += class2str(name, parent, docs, body) + '\n'
+                stub_file += class2str(result) + '\n'
             
         elif definitionName == "dataclass":
-            name, docs, body = result
-            stub_file += "@dataclass" + '\n'
-            stub_file += f"class {name}:" + '\n'
-            stub_file += recursive_body(body, indent=1) + '\n'
+            stub_file += dataclass2str(result) + '\n'
 
-    return stub_file
+    return stub_file, "".join(mutable_string).strip()
 
-def cython_file_2_stub(file):
+def cython_file_2_stub(file: IO[str]) -> Tuple[str, str]:
     with open(file, mode="r") as f:
         input_code = f.read()
-    tree = list(cython_parser.scan_string(input_code+"\n\n"))
-    return parse_tree_to_stub_file(tree)
+    return cython_string_2_stub(input_code)
 
-def cython_string_2_stub(input_code):
-    tree = list(cython_parser.scan_string(input_code+"\n\n"))
-    return parse_tree_to_stub_file(tree)
-
-def test_cython_peg():
+def example_testing():
     from pathlib import Path
     
     # testing file
-    example = Path(r"./examples/example2.pyx")
+    input_file = Path(r"./examples/example2.pyx")
     
-    # generate stub file
-    stub_file = cython_file_2_stub(example)
+    # read stub file
+    with open(input_file, mode='r') as f:
+        input_string = f.read()
+    
+    stub_file, unparsed_lines = cython_string_2_stub(input_string)
+    
+    # lines in the original file that did not match a parsing rule
+    print(f"Percentage Parsed: {1 - len(unparsed_lines)/len(input_string)}")
+    print(f"Unparsed Lines:")
+    print('"""')
+    print(textwrap.indent(unparsed_lines, "    "))
+    print('"""')
     
     # save the type file
-    output_file = example.parent / (example.stem + ".pyi")
-    with open(output_file, mode='w') as f:
+    with open(input_file.with_suffix(".pyi"), mode='w') as f:
         f.write(stub_file)
 
 if __name__ == "__main__":
-    test_cython_peg()
+    example_testing()
