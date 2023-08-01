@@ -34,6 +34,9 @@ Add the stub generation script into your cython setup.py file.
 from pathlib import Path
 import cython_peg as cp
 
+# set indent used
+cp.set_indent("  ")
+
 for file in Path(r"module_directory").glob("*.pyx"):
 
     with open(file, mode='r') as f:
