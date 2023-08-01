@@ -285,8 +285,8 @@ def class2str(result: ParseResults):
     if parent == "Enum":
         return enum2str(result)
             
-    doc_str = f'\n{INDENT}\"""{docs}\"""\n\n' if docs else ''
-    class_str = f"class {name}{f'({parent})' if parent else ''}:{doc_str}"
+    doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
+    class_str = f"class {name}{f'({parent})' if parent else ''}:{doc_str}\n\n"
 
     element_string = []
     for i, b in enumerate(body):
@@ -335,7 +335,7 @@ def cclass2str(result: ParseResults):
                 
     class_str = ""
     doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
-    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + '\n'*2
+    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}\n\n"
 
     element_string = []
     for i, b in enumerate(body):
