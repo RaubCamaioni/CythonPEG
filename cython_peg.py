@@ -225,7 +225,7 @@ def def2str(result: ParseResults):
     decleration, docs, body = result
     name, args, ret = decleration
             
-    return_str = arg2str(ret) if ret else ""
+    return_str = type2str(ret) if ret else ""
     return_str = f" -> {return_str}" if return_str else ''
     doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     
