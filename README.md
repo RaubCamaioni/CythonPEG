@@ -4,8 +4,8 @@ Allows for the auto generation of cython -> python STUB files.
 
 There are a few assumptions that need to be made when converting from cython to python.  
 -How to handle types that don't exist in python?  
-&emsp;-by default type are pulled verbatim, even if they don't exist in python
-&emsp;-type handling can be customized with provided setter functions
+&emsp;-by default type are pulled verbatim, even if they don't exist in python  
+&emsp;-type handling can be customized with provided setter functions  
 -How to handle syntax that does not exist in python?  
 &emsp;-structs are translated to classes
 
