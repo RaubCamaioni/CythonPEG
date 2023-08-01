@@ -16,6 +16,9 @@ There are a few assumptions that need to be made when converting from cython to 
 I have tested against my own cython files.  It works to an acceptable level.  
 Imports, and other small type changes can be modified manually. 
 
+# Colab Notebook to try the Parsing Code
+https://colab.research.google.com/drive/1KvSUznOoeJ_F8GxzA9IafbMXA6mTR_Nj?usp=sharing
+
 # Type Conversions
 Edit the following function to add custom type conversions from cython to python.
 
