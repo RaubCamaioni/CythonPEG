@@ -20,7 +20,7 @@ By including STUB files with your cython compiled module you maintain:
 # Colab notebook to test code
 https://colab.research.google.com/drive/1KvSUznOoeJ_F8GxzA9IafbMXA6mTR_Nj?usp=sharing
 
-# Customize you type conversions
+# Customize your type conversions
 Customizable conversions between cython and python types.  
 Use the setter function provided to change the type conversion function.  
 An example is given inside "usage/examples.ipynb"
