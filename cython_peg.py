@@ -90,6 +90,14 @@ EXPRESSION = Forward()
 ATOM = OBJECT | Group(Literal('(') + EXPRESSION + Literal(')'))
 EXPRESSION << infixNotation(ATOM, [(MULT | DIV, 2, opAssoc.LEFT), (PLUS | MINUS, 2, opAssoc.LEFT),])
 
+# IMPORTS
+IMPORT = Literal("import")
+FROM = Literal("from")
+import_definition = Group(Suppress(IMPORT) + Group(delimited_list(VARIABLE)))("import")
+from_import_defintion = Group(Suppress(FROM) + VARIABLE + Suppress(IMPORT) + Optional(Suppress(Literal('('))) + Group(delimited_list(VARIABLE)) + Optional(Suppress(Literal(')'))))("from")
+import_and_from_import_definition = (from_import_defintion | import_definition)("import")
+import_section = OneOrMore(import_and_from_import_definition)("import_section")
+
 # default_definition (python and cython)
 default_definition = (EQUALS + EXPRESSION)("default")
 
@@ -161,7 +169,7 @@ recursive_cython_class_definition  << definitions
 recursive_cython_struct_definition << definitions
 
 # full recursive definition
-cython_parser = python_class_definition | python_function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | dataclass_definition
+cython_parser = python_class_definition | python_function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | dataclass_definition | import_section
 
 def expression2str(expression: Union[ParseResults, str]):
     """EXPRESSION parsed tree to string"""
@@ -180,7 +188,6 @@ def expression2str(expression: Union[ParseResults, str]):
             
         elif expression.getName() == 'dict':
             expression_string += "{" + ', '.join(f"{expression2str(k)} : {expression2str(v)}" for k, v in expression) + "}"
-        
         else:
             for e in expression:
                 expression_string += expression2str(e)
@@ -367,6 +374,29 @@ def cclass2str(result: ParseResults):
         
     return class_str
 
+def import2str(result: ParseResults, newlines=True):
+    """import2str_definition parsed tree to string"""
+    
+    import_str =""
+    if len(result) == 1:
+        import_str += f"import {', '.join(i for i in result[0])}"
+    elif len(result) == 2:
+
+        if newlines and len(result[1]) > 2:
+            import_str += f"from {result[0]} import (\n"
+            for i, r in enumerate(result[1]):
+                import_str += f"{INDENT}{r}"
+                import_str += "\n" if len(result[1]) == i+1 else ",\n"
+            import_str += ')'
+        else:
+            import_str += f"from {result[0]} import {', '.join(i for i in result[1])}"
+        
+    return import_str
+
+def import_section2str(result: ParseResults):
+    """import_section2str_definition parsed tree to string"""
+    return "\n".join([import2str(imp) for imp in result]) + '\n'
+
 def dataclass2str(result: ParseResults):
     name, docs, body = result
     dataclass_str = ""
@@ -375,6 +405,9 @@ def dataclass2str(result: ParseResults):
     dataclass_str += f'{INDENT}\"""{docs}\"""\n' 
     dataclass_str += textwrap.indent(recursive_body(body), INDENT)
     return dataclass_str
+
+def unimplimented2str(result: ParseResults):
+    return ""
 
 def recursive_body(body: ParseResults):
     """IndentedBlock(restOfLine) parsed tree to string"""
@@ -404,6 +437,7 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
         "cstruct": struct2str, 
         "class": class2str,
         "dataclass": dataclass2str,
+        "import_section": import_section2str,
     }
     
     # ParseResults -> Python Stub Element
@@ -415,11 +449,8 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
         for i in range(start, end):
             mutable_string[i] = ""
     
-        definitionName = result.getName()        
-        if definitionName in parser:
-           return parser[definitionName](result)
-       
-    # join Python Stub Elements
+        return parser.get(result.getName(), unimplimented2str)(result)
+
     stub_file = "\n".join(parse_branch(b) for b in tree)
 
     return stub_file, "".join(mutable_string).strip()

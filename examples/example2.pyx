@@ -1,3 +1,13 @@
+import moduleA
+import moduleB, moduleC
+from moudleA import (
+    moduleD, 
+    moduleE, 
+    moduleF
+)
+from moduleA import functionA, funtion2
+from moduleA.moduleB import methodA
+
 def python_function1(a: Dict[Dict[int, int], int], b = {1: [1, 2, 3]}) -> int:
     """complex type return and assignment parsing"""
     return 1
