@@ -425,9 +425,11 @@ def recursive_body(body: ParseResults):
 def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     """tree traversal and translation of ParseResults to string representation"""
     
-    # force blank lines EOF for indentblock parser
+    # indentblock needs newline as sentinal
     input_code += "\n"
-    tree = list(cython_parser.scan_string(input_code))
+    
+    # PEG top down scan generator
+    tree = cython_parser.scan_string(input_code)
     
     # 3.8+ compatible switch
     parser = {
@@ -441,19 +443,21 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     }
     
     # ParseResults -> Python Stub Element
-    # TODO: remove outer reference to mutable_string
-    mutable_string = list(input_code+" ")
     def parse_branch(branch: Tuple[ParseResults, int, int]):
         result, start, end = branch
+        return parser.get(result.getName(), unimplimented2str)(result), start, end
+    tree_str, start, end = zip(*[parse_branch(b) for b in tree])
     
-        for i in range(start, end):
+    # TODO: this code is ugly
+    mutable_string = list(input_code+" ")
+    for s, e in zip(start, end):
+        for i in range(s, e):
             mutable_string[i] = ""
+            
+    stub_file = "\n".join(tree_str)
+    unparsed_lines = "".join(mutable_string).strip()
     
-        return parser.get(result.getName(), unimplimented2str)(result)
-
-    stub_file = "\n".join(parse_branch(b) for b in tree)
-
-    return stub_file, "".join(mutable_string).strip()
+    return stub_file, unparsed_lines
 
 def cython_file_2_stub(file: IO[str]) -> Tuple[str, str]:
     with open(file, mode="r") as f:
