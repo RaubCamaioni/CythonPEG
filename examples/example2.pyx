@@ -1,7 +1,7 @@
-import moduleA
-import moduleB, moduleC
+import moduleA as modA
+import moduleB, moduleC as modC
 from moudleA import (
-    moduleD, 
+    moduleD as modD, 
     moduleE, 
     moduleF
 )

@@ -93,8 +93,9 @@ EXPRESSION << infixNotation(ATOM, [(MULT | DIV, 2, opAssoc.LEFT), (PLUS | MINUS,
 # IMPORTS
 IMPORT = Literal("import")
 FROM = Literal("from")
-import_definition = Group(Suppress(IMPORT) + Group(delimited_list(VARIABLE)))("import")
-from_import_defintion = Group(Suppress(FROM) + VARIABLE + Suppress(IMPORT) + Optional(Suppress(Literal('('))) + Group(delimited_list(VARIABLE)) + Optional(Suppress(Literal(')'))))("from")
+import_as_definition = Group(VARIABLE + EmptyDefault(Suppress(Literal("as")) + VARIABLE))
+import_definition = Group(Suppress(IMPORT) + Group(delimited_list(import_as_definition)))("import")
+from_import_defintion = Group(Suppress(FROM) + VARIABLE + Suppress(IMPORT) + Optional(Suppress(Literal('('))) + Group(delimited_list(import_as_definition)) + Optional(Suppress(Literal(')'))))("from")
 import_and_from_import_definition = (from_import_defintion | import_definition)("import")
 import_section = OneOrMore(import_and_from_import_definition)("import_section")
 
@@ -374,22 +375,32 @@ def cclass2str(result: ParseResults):
         
     return class_str
 
+def name_alias_2_str(name, alias):
+    print(name, alias)
+    alias_str = f" as {alias}" if alias else ""
+    return f"{name}{alias_str}"
+    
 def import2str(result: ParseResults, newlines=True):
     """import2str_definition parsed tree to string"""
     
     import_str =""
     if len(result) == 1:
-        import_str += f"import {', '.join(i for i in result[0])}"
+        import_str += f"import {', '.join(name_alias_2_str(n, a) for n, a in result[0])}"
+        
     elif len(result) == 2:
 
         if newlines and len(result[1]) > 2:
-            import_str += f"from {result[0]} import (\n"
-            for i, r in enumerate(result[1]):
-                import_str += f"{INDENT}{r}"
-                import_str += "\n" if len(result[1]) == i+1 else ",\n"
-            import_str += ')'
+            # import_str += f"from {result[0]} import (\n"
+            # for i, r in enumerate(result[1]):
+            #     import_str += f"{INDENT}{r}"
+            #     import_str += "\n" if len(result[1]) == i+1 else ",\n"
+            # import_str += ')'
+            
+            nl = '\n'
+            tab = '\t'
+            import_str += f"from {result[0]} import ({nl}{f',{nl}'.join(f'{tab}{name_alias_2_str(n, a)}' for n, a in result[1])}{nl})"
         else:
-            import_str += f"from {result[0]} import {', '.join(i for i in result[1])}"
+            import_str += f"from {result[0]} import {', '.join(name_alias_2_str(n, a) for n, a in result[1])}"
         
     return import_str
 
