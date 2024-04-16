@@ -134,8 +134,7 @@ python_argument_definition = Group(VARIABLE("name") + EmptyDefault(COLON + type_
 cython_argument_definition = Group(SELF | (type_definition + Suppress(EmptyDefault("*")) + VARIABLE("name") + EmptyDefault(default_definition)))("cython_argument")
 
 # arguments definition
-python_arguments_definition = parentheses_suppress(delimited_list(python_argument_definition))("arguments")
-cython_arguments_definition = parentheses_suppress(delimited_list(cython_argument_definition))("arguments")
+arguments_definition = parentheses_suppress(delimitedList(cython_argument_definition | python_argument_definition))("arguments")
 
 # recursive definitions 
 recursive_class_definition = Forward()
@@ -154,8 +153,8 @@ docstring = QuotedString('"""', multiline=True, escQuote='""""')
 
 # cython enum definition
 cenum_declaration = Group(Suppress(CPDEF | CDEF) + Suppress(ENUM) + VARIABLE + Suppress(":"))("cenum_declaration")
-cenum_body = Group( (~reserved_words + VARIABLE) + Optional(Suppress("=" + INTEGER), "") + Optional(",", ""))
-cenum_definition = (cenum_declaration + OneOrMore(cenum_body))("cenum")
+cenum_body = IndentedBlock(Group(VARIABLE + Optional(Suppress("=" + INTEGER), "") + Optional(",", "")))
+cenum_definition = (cenum_declaration + cenum_body)("cenum")
 
 # external declarations
 NAMESPACE = Literal("namespace")
@@ -172,12 +171,12 @@ python_class_body = IndentedBlock(recursive_class_definition, recursive=True)
 python_class_definition = (python_class_decleration + Optional(docstring, default="") + python_class_body)("class")
 
 # python function definitions
-python_function_decleration = Group(Suppress(DEF) + VARIABLE + Group(python_arguments_definition) + Optional(python_return_definition, "") + Suppress(":"))("def_decleration")
+python_function_decleration = Group(Suppress(DEF) + VARIABLE + Group(arguments_definition) + Optional(python_return_definition, "") + Suppress(":"))("def_decleration")
 python_function_body = IndentedBlock(recursive_def_definition, recursive=True)
 python_function_definition = (python_function_decleration + Optional(docstring, default="") + python_function_body)("def")
 
 # cython function definition 
-cython_function_decleration = Group(Suppress((DEF | CDEF | CPDEF)) + Optional(type_definition + ~(cython_arguments_definition | python_arguments_definition), default="") + VARIABLE + Group(python_arguments_definition | cython_arguments_definition) + Optional(VARIABLE, default="") + Suppress(":"))("cdef_decleration")
+cython_function_decleration = Group(Suppress((CDEF | CPDEF)) + Optional(type_definition + ~arguments_definition, default="") + VARIABLE + Group(arguments_definition) + Optional(VARIABLE, default="") + Suppress(":"))("cdef_decleration")
 cython_function_body = IndentedBlock(recursive_cython_def_definition, recursive=True)
 cython_function_definition = (cython_function_decleration + Optional(docstring, default="") + cython_function_body)("cdef")
 
@@ -268,12 +267,19 @@ def arg2str(arg: ParseResults):
 
 def args2str(args: ParseResults, newlines: bool=False):
     """python_arguments_definition parsed tree to string"""
+    def format_arg(arg):
+        if arg[0] == "self": return "self" # handle unique case cdef inside class
+        if(arg.getName() == "python_argument"):
+            return arg2str(arg)
+        elif(arg.getName() == "cython_argument"):
+            return cythonarg2str(arg)
+    
     joiner = f',\n{INDENT}' if newlines else ', '
-    return joiner.join(arg2str(arg) for arg in args)
+    return joiner.join(format_arg(arg) for arg in args)
 
 def def2str(result: ParseResults):
     """function_definition parsed tree to string"""
-
+    
     decleration, docs, body = result
     name, args, ret = decleration
 
@@ -308,15 +314,18 @@ def cythonargs2str(args: ParseResults, newlines: bool=False):
 
 def cdef2str(result: ParseResults):
     """cython_function_definition parsed tree to string"""
+
     decleration, docs, body = result
     ret, name, args, gil = decleration
             
     doc_str = f'\n{INDENT}\"""{docs}\"""' if docs else ''
     ret_str = type2str(ret) if ret else "" 
     ret_str = f" -> {ret_str}" if ret_str else ''
+
     arg_str = cythonargs2str(args)
     if len(arg_str) > 100:
         arg_str = cythonargs2str(args, newlines=True)
+    
     return f"def {name}({arg_str}){ret_str}:{doc_str}\n{INDENT}..." + '\n'
 
 def enum2str(result: ParseResults):
@@ -374,13 +383,14 @@ def class2str(result: ParseResults):
 
 def cenum2str(result: ParseResults):
     """enum_definition parsed tree to string"""
-
+    
     global FOUND_ENUM
     FOUND_ENUM = True
+    name, body = result
     str = ""
-    str += f"class {result[0][0]}(Enum):\n{INDENT}"
+    str += f"class {name[0]}(Enum):\n{INDENT}"
     result.pop(0)
-    return str + f"\n{INDENT}".join([f"{imp[0]}: int" for imp in result]) + '\n'
+    return str + f"\n{INDENT}".join([f"{imp[0]}: int" for imp in body]) + '\n'
 
 def struct2str(result):
     """cython_struct_definition parsed tree to string"""
@@ -419,6 +429,10 @@ def cclass2str(result: ParseResults):
         if parser_name == "cclass_decleration":
             result = (b, body[i+1], body[i+2])
             element_string.append(textwrap.indent(cclass2str(result), INDENT))
+
+        elif parser_name == "def_decleration":
+            result = (b, body[i+1], body[i+2])
+            element_string.append(textwrap.indent(def2str(result), INDENT))
         
         elif parser_name == "cdef_decleration":
             result = (b, body[i+1], body[i+2])
