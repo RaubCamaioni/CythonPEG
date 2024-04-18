@@ -121,10 +121,6 @@ type_forward << type_definition
 # return definitions
 python_return_definition = Suppress(RETURN) + type_definition
 
-# cython variable definition
-cvariable_definition = Group(Suppress(CDEF) + type_definition + Suppress(EmptyDefault("*")) + VARIABLE + EmptyDefault(default_definition))("cvariable")
-cvariable_section = OneOrMore(cvariable_definition)("cvariable_section")
-
 # alias definition
 ctypedef_definition = Group(Suppress(CTYPEDEF) +  ~reserved_words + type_definition + VARIABLE)("ctypedef")
 ctypedef_section = OneOrMore(ctypedef_definition)("ctypedef_section")
@@ -187,7 +183,7 @@ cython_class_definition = (cython_class_decleration + Optional(docstring, defaul
 
 # cython struct definition
 cython_struct_decleration = Group(Suppress(CDEF + STRUCT) + VARIABLE + Suppress(":"))
-cython_struct_body = IndentedBlock(Group(type_definition + VARIABLE), recursive=True)
+cython_struct_body = IndentedBlock(Group(type_definition + Group(delimited_list(VARIABLE))), recursive=True)
 cython_struct_definition = (cython_struct_decleration + Optional(docstring, default="") + cython_struct_body)("cstruct")
 
 # dataclass definition
@@ -196,7 +192,7 @@ dataclass_body = IndentedBlock(rest_of_line, recursive=True)
 dataclass_definition = (dataclass_decleration + Optional(docstring, default="") + dataclass_body)("dataclass")
 
 # recursive definitions (could be individually assigned for parsing performance improvements: i.e cython_class never defined inside python_function)
-definitions = (python_class_definition | python_function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | cvariable_definition | restOfLine)
+definitions = (python_class_definition | python_function_definition | cython_function_definition | cython_class_definition | cython_struct_definition | restOfLine)
 recursive_class_definition         << definitions
 recursive_def_definition           << definitions
 recursive_cython_def_definition    << definitions
@@ -205,7 +201,7 @@ recursive_cython_struct_definition << definitions
 recursive_external_definition      << definitions
 
 # full recursive definition
-cython_parser = python_class_definition | cython_class_definition | python_function_definition | cython_function_definition | cython_struct_definition | dataclass_definition | import_section | directive_section | cenum_definition | external_definition | cvariable_section | ctypedef_section
+cython_parser = python_class_definition | cython_class_definition | python_function_definition | cython_function_definition | cython_struct_definition | dataclass_definition | import_section | directive_section | cenum_definition | external_definition | ctypedef_section
 
 def expression2str(expression: Union[ParseResults, str]):
     """EXPRESSION parsed tree to string"""
@@ -404,8 +400,12 @@ def struct2str(result):
     
     element_string = []
     for b in body:
-        type_str, name = b
-        element_string.append(f"{INDENT}{name}: {type2str(type_str)}")
+        type_str, names = b
+        if(names.length == 1):
+            element_string.append(f"{INDENT}{names[0]}: {type2str(type_str)}")
+        else:
+            for name in names:
+                element_string.append(f"{INDENT}{name}: {type2str(type_str)}")
     
     return class_str + "\n".join(element_string) + '\n'
 
@@ -437,9 +437,6 @@ def cclass2str(result: ParseResults):
         elif parser_name == "cdef_decleration":
             result = (b, body[i+1], body[i+2])
             element_string.append(textwrap.indent(cdef2str(result), INDENT))
-
-        elif parser_name == "cvariable":
-            element_string.append(textwrap.indent(cvariable2str(b), INDENT))
             
     
     if not len(element_string):
@@ -506,17 +503,6 @@ def recursive_body(body: ParseResults):
             
     return '\n'.join(element_string) + '\n'
 
-def cvariable2str(result: ParseResults):
-    """cython variable parsed tree to string"""
-
-    t, n, d = result
-    return n + ": " + type2str(t)
-
-def cvariable_section2str(result: ParseResults):
-    """cython variable section parsed tree to string"""
-
-    return "\n".join([cvariable2str(imp) for imp in result]) + '\n'
-
 def ctypedef2str(result: ParseResults):
     """ctypedef parsed tree to string"""
 
@@ -550,7 +536,6 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
         "dataclass": dataclass2str,
         "import_section": import_section2str,
         "cenum": cenum2str,
-        "cvariable_section": cvariable_section2str,
         "ctypedef_section": ctypedef_section2str
     }
     
