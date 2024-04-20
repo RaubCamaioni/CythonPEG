@@ -9,6 +9,9 @@ There are a few assumptions that need to be made when converting from cython to 
 -How to handle syntax that does not exist in python?  
 &emsp;-structs are translated to classes
 
+# Dependency
+pyparsing >= 3.1.0
+
 # Why generate stub files?
 Most langauge servers don't understand cython code.  
 
