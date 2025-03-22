@@ -24,6 +24,8 @@ pip-wheel-metadata/
 *.egg-info/
 .tox/
 *.egg
+.pytest_cache/
+*.pyi
 
 # Virtual environment
 .venv/
