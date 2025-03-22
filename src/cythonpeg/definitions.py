@@ -119,7 +119,7 @@ type_definition = Group(
 )("type")
 type_forward << type_definition
 
-# return definitions
+# return definition
 python_return_definition = Suppress(RETURN) + type_definition
 
 # alias definition
@@ -140,12 +140,7 @@ arguments_definition = parentheses_suppress(DelimitedList(cython_argument_defini
 )
 
 # recursive definitions
-recursive_class_definition = Forward()
-recursive_def_definition = Forward()
-recursive_cython_def_definition = Forward()
-recursive_cython_class_definition = Forward()
-recursive_cython_struct_definition = Forward()
-recursive_external_definition = Forward()
+recursive_definitions = Forward()
 
 # compiler directives
 DIRECTIVE = LineStart() + Literal("#") + SkipTo(LineEnd()) + LineEnd()
@@ -170,23 +165,23 @@ external_declaration = Group(
     + EmptyDefault(external_directive)
     + Suppress(":")
 )("external_declaration")
-external_body = IndentedBlock(recursive_external_definition, recursive=True)
+external_body = IndentedBlock(recursive_definitions, recursive=True)
 external_definition = (external_declaration + originalTextFor(external_body))("external")
 
 # python class definition
 python_class_parent = Word(alphanums + "_" + ".")
 python_class_arguments = parentheses_suppress(python_class_parent)
-python_class_decleration = Group(Suppress(CLASS) + VARIABLE + EmptyDefault(python_class_arguments) + Suppress(":"))(
-    "class_decleration"
-)
-python_class_body = IndentedBlock(recursive_class_definition, recursive=True)
+python_class_decleration = Group(
+    Suppress(CLASS) + VARIABLE + EmptyDefault(python_class_arguments) + Suppress(":"),
+)("class_decleration")
+python_class_body = IndentedBlock(recursive_definitions, recursive=True)
 python_class_definition = (python_class_decleration + Optional(docstring, default="") + python_class_body)("class")
 
 # python function definitions
 python_function_decleration = Group(
     Suppress(DEF) + VARIABLE + Group(arguments_definition) + Optional(python_return_definition, "") + Suppress(":")
 )("def_decleration")
-python_function_body = IndentedBlock(recursive_def_definition, recursive=True)
+python_function_body = IndentedBlock(recursive_definitions, recursive=True)
 python_function_definition = (python_function_decleration + Optional(docstring, default="") + python_function_body)(
     "def"
 )
@@ -200,7 +195,7 @@ cython_function_decleration = Group(
     + Optional(VARIABLE, default="")
     + Suppress(":")
 )("cdef_decleration")
-cython_function_body = IndentedBlock(recursive_cython_def_definition, recursive=True)
+cython_function_body = IndentedBlock(recursive_definitions, recursive=True)
 cython_function_definition = (cython_function_decleration + Optional(docstring, default="") + cython_function_body)(
     "cdef"
 )
@@ -209,7 +204,7 @@ cython_function_definition = (cython_function_decleration + Optional(docstring, 
 cython_class_decleration = Group(
     Suppress(CDEF + CLASS) + VARIABLE + EmptyDefault(python_class_arguments) + Suppress(":")
 )("cclass_decleration")
-cython_class_body = IndentedBlock(recursive_cython_class_definition, recursive=True)
+cython_class_body = IndentedBlock(recursive_definitions, recursive=True)
 cython_class_definition = (cython_class_decleration + Optional(docstring, default="") + cython_class_body)("cclass")
 
 # cython struct definition
@@ -226,23 +221,18 @@ dataclass_definition = (dataclass_decleration + Optional(docstring, default="") 
 definitions = (
     python_class_definition
     | python_function_definition
-    | cython_function_definition
     | cython_class_definition
+    | cython_function_definition
     | cython_struct_definition
     | restOfLine
 )
-recursive_class_definition << definitions
-recursive_def_definition << definitions
-recursive_cython_def_definition << definitions
-recursive_cython_class_definition << definitions
-recursive_cython_struct_definition << definitions
-recursive_external_definition << definitions
+recursive_definitions << definitions
 
 # full recursive definition
 cython_parser = (
     python_class_definition
-    | cython_class_definition
     | python_function_definition
+    | cython_class_definition
     | cython_function_definition
     | cython_struct_definition
     | dataclass_definition

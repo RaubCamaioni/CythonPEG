@@ -152,9 +152,8 @@ def enum2str(result: ParseResults):
     decleration, docs, body = result
     name, parent = decleration
 
-    class_str = ""
     doc_str = f'\n{INDENT}"""{docs}"""' if docs else ""
-    class_str += f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + "\n"
+    class_str = f"class {name}{f'({parent})' if parent else ''}:{doc_str}" + "\n"
 
     for b in body:
         class_str += INDENT + b + "\n"
@@ -342,6 +341,9 @@ def ctypedef_section2str(result: ParseResults):
 def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     """tree traversal and translation of ParseResults to string representation"""
 
+    # replace tabs with spaces
+    input_code = input_code.replace("\t", INDENT)
+
     # indentblock needs newline as sentinal
     input_code += "\n"
 
@@ -349,7 +351,7 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     tree = cython_parser.scan_string(input_code)
 
     # 3.8+ compatible switch
-    parser = {
+    string_constructor = {
         "def": def2str,
         "cdef": cdef2str,
         "class": class2str,
@@ -364,7 +366,7 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
     # ParseResults -> Python Stub Element
     def parse_branch(branch: Tuple[ParseResults, int, int]):
         result, start, end = branch
-        return parser.get(result.getName(), unimplimented2str)(result), start, end
+        return string_constructor.get(result.get_name(), unimplimented2str)(result), start, end
 
     parsed_tree = [parse_branch(b) for b in tree]
 
@@ -375,6 +377,7 @@ def cython_string_2_stub(input_code: str) -> Tuple[str, str]:
 
     # TODO: this code is ugly
     mutable_string = list(input_code + " ")
+
     for s, e in zip(start, end):
         for i in range(s, e):
             mutable_string[i] = ""
