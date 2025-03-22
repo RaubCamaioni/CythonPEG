@@ -2,47 +2,72 @@ from Cython.Build import cythonize
 from pathlib import Path
 import cythonpeg
 import pytest
+import ast
 
-files = list((Path(__file__).parent / "cython").glob("*.pyx"))
+
+def partial_type(type_str: str) -> str:
+    if "float" in type_str:
+        return "float"
+    elif "int" in type_str:
+        return "int"
+    elif "bint" in type_str:
+        return "bool"
+    else:
+        return type_str
 
 
-@pytest.mark.parametrize("file", files)
-def test_compile(file):
-    """Compiles a Cython file."""
+def complete_type(type_str: str) -> str:
+    if ":" in type_str:
+        return "np.ndarray"
+    else:
+        return type_str
+
+
+cythonpeg.set_type_converter_partial(partial_type)
+cythonpeg.set_type_converter_complete(complete_type)
+
+
+def _glob(extention: str):
+    return (Path(__file__).parent / "cython").glob(extention)
+
+
+@pytest.mark.parametrize("file", _glob("*.pyx"))
+def test_compile(file: Path):
     try:
         cythonize(
             str(file),
             compiler_directives={"language_level": 3},
         )
-        print(f"Compile Success: {file}")
-        assert True
     except Exception:
-        print(f"Compile Failed: {file}")
-        assert False
+        pytest.fail(f"compilation failed: {file}")
 
 
-@pytest.mark.parametrize("file", files)
-def test_generate_stubs(file):
-    """parse all valid cython files: all lines must be parsed"""
-
+@pytest.mark.parametrize("file", _glob("*.pyx"))
+def test_generate_stubs(file: Path):
     with open(file, mode="r") as f:
         input_string = f.read()
 
     stub_file, unparsed_characters = cythonpeg.cython_string_2_stub(input_string)
 
     if len(unparsed_characters) == 0:
-        print(f"Parsing Success: {file}")
-        assert True
+        with open(file.with_suffix(".pyi"), "w") as f:
+            f.write(stub_file)
     else:
-        print(f"Parsing Failed: {file}\n")
-        unparsed_lines = unparsed_characters.split("\n")
-        print(f"Unparsed Characters: {len(unparsed_characters)}")
-        print(f"Unparsed Lines: {len(unparsed_lines)}\n")
-        print(unparsed_characters, end="\n\n")
-        assert False
+        pytest.fail(f"Unparsed Characters: {len(unparsed_characters)}")
+
+
+@pytest.mark.parametrize("file", _glob("*.pyi"))
+def test_python_valid(file: Path):
+    try:
+        with open(file, "r", encoding="utf-8") as f:
+            ast.parse(f.read())
+    except SyntaxError as e:
+        pytest.fail(f"SyntaxError in {file}: {e}")
+    except Exception as e:
+        pytest.fail(f"Exception in {file}: {e}")
 
 
 if __name__ == "__main__":
     # runs until first failed assert
-    for file in files:
-        test_generate_stubs(file)
+    for file in (Path(__file__).parent / "cython").glob("*.pyi"):
+        test_python_valid(file)

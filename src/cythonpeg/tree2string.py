@@ -1,8 +1,29 @@
 from pyparsing import ParseResults
 from typing import Union, Tuple, IO
 import textwrap
-from cythonpeg.utilities import partial_cython_2_python, complete_cython_2_python
 from cythonpeg.definitions import cython_parser
+from typing import Callable
+
+
+def partial_cython_2_python(type_str: str) -> str:
+    """partial type component"""
+    return type_str
+
+
+def complete_cython_2_python(type_str: str) -> str:
+    """complete type component"""
+    return type_str
+
+
+def set_type_converter_partial(func: Callable[[str], str]):
+    global partial_cython_2_python
+    partial_cython_2_python = func
+
+
+def set_type_converter_complete(func: Callable[[str], str]):
+    global complete_cython_2_python
+    complete_cython_2_python = func
+
 
 INDENT = "    "
 
