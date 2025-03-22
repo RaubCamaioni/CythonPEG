@@ -28,7 +28,7 @@ The cythonpeg package installs a cli utility for generting stub files.
 It will create a .pyi file for each .pyx file, overwriting older .pyi files.  
 
 ```bash
-pip install https://github.com/RaubCamaioni/CythonPEG.git
+pip install git+https://github.com/RaubCamaioni/CythonPEG.git
 cythonpeg ./my_cython_files/*.pyx
 ```
 
