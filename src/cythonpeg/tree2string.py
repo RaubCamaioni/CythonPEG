@@ -222,11 +222,9 @@ def struct2str(result):
     element_string = []
     for b in body:
         type_str, names = b
-        if names.length == 1:
-            element_string.append(f"{INDENT}{names[0]}: {type2str(type_str)}")
-        else:
-            for name in names:
-                element_string.append(f"{INDENT}{name}: {type2str(type_str)}")
+
+        for name in names:
+            element_string.append(f"{INDENT}{name}: {type2str(type_str)}")
 
     return class_str + "\n".join(element_string) + "\n"
 
