@@ -1,0 +1,33 @@
+[project]
+name = "cythonpeg"
+dynamic = ["version"]
+description = "Generate python stub from cython pyx files"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "cython>=3.0.12",
+    "ipykernel>=6.29.5",
+    "pyparsing>=3.1.0",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "cythonpeg.__version__"}
+
+[[project.maintainers]]
+name = "Raub Camaioni"
+
+[project.license]
+file = "LICENSE"
+
+[project.scripts]
+cythonpeg = "cythonpeg.entrypoints:entrypoint"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "cython",
+    "ipykernel",
+]
+
+[tool.ruff]
+line-length = 120

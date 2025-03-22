@@ -1,4 +1,4 @@
-# CythonPEG
+## CythonPEG
 Description of Cython syntax in pyparsings PEG syntax.  
 Allows for the auto generation of cython -> python STUB files.  
 
@@ -9,10 +9,7 @@ There are a few assumptions that need to be made when converting from cython to 
 -How to handle syntax that does not exist in python?  
 &emsp;-structs are translated to classes
 
-# Dependency
-pyparsing >= 3.1.0
-
-# Why generate stub files?
+## Why generate stub files?
 Most langauge servers don't understand cython code.  
 
 By including STUB files with your cython compiled module you maintain:  
@@ -20,43 +17,25 @@ By including STUB files with your cython compiled module you maintain:
 -argument names/number and type hinting  
 -doc strings  
 
-# Colab notebook to test code
-https://colab.research.google.com/drive/1KvSUznOoeJ_F8GxzA9IafbMXA6mTR_Nj?usp=sharing
-
-# Customize your type conversions
+## Customize your type conversions
 Customizable conversions between cython and python types.  
 Use the setter function provided to change the type conversion function.  
 An example is given inside "usage/examples.ipynb"
 
-# How do I use this repo?
-All the parsing code is contained inside the file "cython_peg.py".  
-Copy that file into your project and create a simple python script for creating the stub files.  
-Add the stub generation script into your cython setup.py file.
+## How do I use this repo?
 
-```python
-from pathlib import Path
-import cython_peg as cp
+The cythonpeg package installs a cli utility for generting stub files.  
+It will create a .pyi file for each .pyx file, overwriting older .pyi files.  
 
-# set indent used in stub file
-cp.set_indent("  ")
-
-for file in Path(r"module_directory").glob("*.pyx"):
-
-    with open(file, mode='r') as f:
-        cython_tokens = f.read()
-
-    print(f"Parsing File: {file}")
-    stub_file, unparsed_tokens = cp.cython_string_2_stub(cython_tokens)
-    print(f"Percentage Parsed: {1 - len(unparsed_tokens)/len(cython_tokens)}")
-
-    with open(file.with_suffix(".pyi"), mode='w') as f:
-        f.write(stub_file)
+```bash
+pip install https://github.com/RaubCamaioni/CythonPEG.git
+cythonpeg ./my_cython_files/*.pyx
 ```
 
-# Issues
-The entirety of the cython syntax is not captured in cython_peg.py.  
+## Issues
+The entirety of the cython syntax is not captured in cythonpeg.py.  
 If the cython syntax is unknown/invalid the syntax will not be parsed and will appear in the "unparsed tokens" return.  
 The percentage of parsing can be calculated and used as an indication of parsing issues.  
 
-If the parser fails, post an issue with the code that caused an issue.  
+If the parser fails, post an issue with code that reproduces the error.  
 Learn pyparsing syntax at: https://pyparsing-docs.readthedocs.io/en/latest/index.html  

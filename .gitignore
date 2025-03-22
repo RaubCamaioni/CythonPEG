@@ -1,4 +1,31 @@
-/myenv/*
-/local/*
-/__pycache__/*
-*.pyi
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# c files
+*.c
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs-info/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+*.egg-info/
+.tox/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+env/
