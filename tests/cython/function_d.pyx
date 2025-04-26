@@ -16,3 +16,6 @@ class MyEnum(Enum):
 
 def test2(interp_flag: MyEnum = MyEnum.A):
     return
+
+def test3(self, **_kwargs: dict):
+    return

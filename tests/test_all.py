@@ -12,6 +12,8 @@ def partial_type(type_str: str) -> str:
         return "int"
     elif "bint" in type_str:
         return "bool"
+    elif "double" in type_str:
+        return "float"
     else:
         return type_str
 
@@ -53,7 +55,7 @@ def test_generate_stubs(file: Path):
         with open(file.with_suffix(".pyi"), "w") as f:
             f.write(stub_file)
     else:
-        pytest.fail(f"Unparsed Characters: {len(unparsed_characters)}")
+        pytest.fail(f"Unparsed Characters: {file} {len(unparsed_characters)}\n{unparsed_characters}")
 
 
 @pytest.mark.parametrize("file", _glob("*.pyi"))
@@ -71,3 +73,7 @@ if __name__ == "__main__":
     # runs until first failed assert
     for file in (Path(__file__).parent / "cython").glob("*.pyi"):
         test_python_valid(file)
+
+    for file in (Path(__file__).parent / "cython").glob("*.pyx"):
+        test_generate_stubs(file)
+

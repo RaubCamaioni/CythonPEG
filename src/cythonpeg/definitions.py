@@ -54,7 +54,7 @@ SELF = Literal("self")
 EXTERN = Literal("extern")
 
 # OBJECTS
-VARIABLE = Combine(Word("_" + alphanums + "_" + ".") + ZeroOrMore("*"))
+VARIABLE = Combine(Word(alphanums + "_" + "." + "*"))
 INTEGER = Word("+-" + nums) + ~FollowedBy(".")
 FLOAT = Combine(Word("+-" + nums) + "." + Word(nums))
 TRUE = Literal("True")
